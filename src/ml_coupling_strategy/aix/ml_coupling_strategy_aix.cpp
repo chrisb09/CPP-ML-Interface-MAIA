@@ -1,11 +1,9 @@
-#pragma once
-
-#include "ml_coupling_strategy.hpp"
+#include "../ml_coupling_strategy.hpp"
 #include <string>
 #include <vector>
 #include <iostream>
 #include <stdexcept>
-#include "aixeleratorService"
+#include "aixeleratorService.h"
 
 class MLCouplingStrategyAix : public MLCouplingStrategy {
 private:
@@ -17,7 +15,7 @@ private:
 public:
     // Constructor / destructor
     MLCouplingStrategyAix() = default;
-    ~MLCouplingStrategyAix() override {
+    ~MLCouplingStrategyAix() {
         // In case user didn’t call finalize
         if (aixelerator_) {
             deleteAIxeleratorServiceFloat_C(aixelerator_);
@@ -29,11 +27,11 @@ public:
      * @brief Implementation of the Fortran subroutine ml_coupling_strategy_init.
      *        Called by the “init” routine in the coupling logic.
      */
-    void ml_coupling_strategy_init(const std::string& model,
+    void init(const std::string& model,
                                    const std::vector<int>& input_shape,
                                    const std::vector<int>& output_shape,
                                    int batch_size,
-                                   int& comm) override
+                                   int& comm)
     {
         // 1) Allocate the float arrays that mirror the Fortran “allocate(...)”
         //    via std::vector::resize in C++.
@@ -107,12 +105,12 @@ public:
         );
     }
 
-    void ml_coupling_strategy_inference(const double* input_fields, double* output_fields, int dim1, int dim2, int dim3, int dim4, int dim5) override
+    void inference(const double* input_fields, double* output_fields, int dim1, int dim2, int dim3, int dim4, int dim5)
     {
         inferenceAIxeleratorServiceFloat_C(aixelerator_);
     }
 
-    void ml_coupling_strategy_finalize() override
+    void finalize()
     {
         if (aixelerator_) {
             deleteAIxeleratorServiceFloat_C(aixelerator_);

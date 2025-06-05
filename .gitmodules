@@ -1,0 +1,6 @@
+[submodule "extern/aixeleratorservice"]
+	path = extern/aixeleratorservice
+	url = git@git-ce.rwth-aachen.de:fabian.orland/aixeleratorservice.git
+[submodule "extern/phydll"]
+	path = extern/phydll
+	url = git@git-ce.rwth-aachen.de:tomhilgers/phydll.git

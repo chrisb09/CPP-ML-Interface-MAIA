@@ -1,0 +1,8 @@
+{
+	"InstallScripts" : 
+	[
+		"/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/BUILD/cmake_install.cmake",
+		"/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/BUILD/src/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

@@ -1,9 +1,11 @@
-#pragma once
-
 #include "ml_coupling.hpp"
-#include "ml_coupling_strategy.hpp"
-#include "ml_coupling_strategy_aix.cpp"
-#include "ml_coupling_strategy_phydll.cpp"
+
+#ifdef WITH_AIX
+#include "../ml_coupling_strategy/aix/ml_coupling_strategy_aix.cpp"
+#endif
+#ifdef WITH_PHYDLL
+#include "../ml_coupling_strategy/phydll/ml_coupling_strategy_phydll.cpp"
+#endif
 
 #include <vector>
 #include <iostream>
@@ -14,114 +16,90 @@
 
 class MLCouplingMaia : public MLCoupling
 {
-public:
+protected:
     int irank = 0;
-
 public:
     MLCouplingMaia() = default;
-    ~MLCouplingMaia() override 
-    {
-        // Ensure resources are freed if user forgot to call finalize().
+    ~MLCouplingMaia() {
         finalize();
     }
 
-    void init(double* input_fields_ptr, 
+    void init(int strategy_id){
+        coupling_strategy_id = strategy_id;
+        #ifdef WITH_AIX
+        if (coupling_strategy_id == 1) {
+            coupling_strategy = new MLCouplingStrategyAix();
+        } 
+        #endif
+        #ifdef WITH_PHYDLL
+        if (coupling_strategy_id == 2) {
+            coupling_strategy = new MLCouplingStrategyPhyDll();
+        }
+        #endif
+        if (!coupling_strategy) {
+            std::cerr << "ERROR: Unknown coupling_strategy_id = " << coupling_strategy_id << "!\n";
+        }
+
+        coupling_strategy->init();
+    }
+
+    void setup(double* input_fields_ptr, 
               double* output_fields_ptr,
               const std::string& modelPath,
               int batchSize,
-              const std::vector<int>& input_shape,
-              const std::vector<int>& output_shape,
-              const std::vector<int>& ghostCells,
-              int strategy_id,
-              int appComm) override
-    {
-        // 1) Store pointers and parameters in base-class fields
-        //    (mirroring self%input_fields => input_fields in Fortran)
-        input_fields       = input_fields_ptr;
-        output_fields      = output_fields_ptr;
-        model_path         = modelPath;
-        batch_size         = batchSize;
-        coupling_strategy_id = strategy_id;
-        app_comm           = appComm;
+              const std::vector<int>& nCells,
+              const std::vector<int>& nOffsetCells,
+              MPI_Comm appComm) {
+        input_fields = input_fields_ptr;
+        output_fields = output_fields_ptr;
+        model_path = modelPath;
+        batch_size = batchSize;
+        app_comm = appComm;
 
-
-        irank = MPI_Comm_rank(app_comm, irank);
-
-        // 2) Allocate memory for input_fields_pre, output_fields_post, ghost_cells
-        //    in the base class, these are double*.
-        auto product = [](const std::vector<int>& dims){
-            long long prod = 1;
-            for(int d : dims) { prod *= d; }
-            return prod;
-        };
-
-        long long inCount  = product(input_shape);
-        long long outCount = product(output_shape);
-
-        input_fields_pre  = new double[inCount];
-        output_fields_post= new double[outCount];
-
-        // Store ghost cell settings:
-        // MLCouplingT has a std::vector<int> ghost_cells as well
-        ghost_cells_.resize(3);
-        ghost_cells_[0] = ghostCells[0];
-        ghost_cells_[1] = ghostCells[1];
-        ghost_cells_[2] = ghostCells[2];
-
-        // 3) Pick the coupling strategy, as in Fortran:
-        //    if (coupling_strategy_id == 1) then
-        //        allocate(ml_coupling_strategy_aix_t :: self%coupling_strategy)
-        //    if (coupling_strategy_id == 2) then
-        //        allocate(ml_coupling_strategy_phydll_t :: self%coupling_strategy)
-        if (coupling_strategy_id == 1) {
-            coupling_strategy = new MLCouplingStrategyAix();
-        } else if (coupling_strategy_id == 2) {
-            coupling_strategy = new MLCouplingStrategyPhyDll();
-        }
-        if (!coupling_strategy) {
-            std::cerr << "ERROR: Unknown coupling_strategy_id = " 
-                      << coupling_strategy_id << "!\n";
-            // throw or handle error
+        this->nCells[0] = nCells[0]; 
+        this->nCells[1] = nCells[1];
+        this->nCells[2] = nCells[2];
+        this->nOffsetCells[0] =  nOffsetCells[0];
+        this->nOffsetCells[1] =  nOffsetCells[1];
+        this->nOffsetCells[2] =  nOffsetCells[2];       
+        
+        m_phyFields.clear();
+        for(size_t i = 0; i < phyFields.size(); i++){
+            m_phyFields.push_back(phyFields[i]);  
         }
 
-        // Initialize the chosen strategy:
-        coupling_strategy->ml_coupling_strategy_init(
-            model_path,
-            input_shape,
-            output_shape,
-            batchSize,
-            app_comm
-        );
+        // allocate memory space to store DL fields
+        m_dlFields.resize(m_nFields, nullptr);
+        for(int i = 0; i < m_nFields; i++) {
+            m_dlFields[i] = new MFloat[m_fieldSize];
+            for(int j = 0; j < m_fieldSize; j++) {
+            m_dlFields[i][j] = 0.0;
+            }
+        } 
+
+        coupling_strategy->setup(fieldSize, nFields, appComm);
     }
 
+    void preprocess_input(const double* input_fields, double* input_fields_pre) {
+        //input_fields_pre = extractCubes(input_fields);
+    }
 
-    void preprocess_input(const double* input_fields, double* input_fields_pre) override {}
-
-    void inference(const double* input_fields_pre, double* output_fields_post) override {
+    void inference(const double* input_fields_pre, double* output_fields_post) {
         if (!coupling_strategy) {
             std::cerr << "ERROR: No coupling strategy set!\n";
             return;
         }
-        // In Fortran:
-        //   call self%coupling_strategy%ml_coupling_strategy_inference(input_fields_pre,
-        //                                                              output_fields_post)
-        // In C++:
-        //   We pass dimension parameters too. Adjust as needed:
-        int dim1 = 1, dim2 = 1, dim3 = 1, dim4 = 1, dim5 = 1; 
-        // You would store them from init(...) or compute them from input_shape & output_shape.
-        coupling_strategy->ml_coupling_strategy_inference(
-            input_fields_pre,
-            output_fields_post,
-            dim1, dim2, dim3, dim4, dim5
-        );
+        
+        coupling_strategy->inference(input_fields_pre, output_fields_post);
     }
 
-    void postprocess_output(const double* output_fields_post, double* output_fields) override{}
+    void postprocess_output(const double* output_fields_post, double* output_fields){
+        //output_fields = combineCubes(output_fields_post);
+    }
 
-    void finalize() override {
-        // If the strategy is still present, finalize it
+    void finalize() {
         if (coupling_strategy) {
-            coupling_strategy->ml_coupling_strategy_finalize();
+            coupling_strategy->finalize();
             delete coupling_strategy;
             coupling_strategy = nullptr;
         }
@@ -135,5 +113,9 @@ public:
             delete[] output_fields_post;
             output_fields_post = nullptr;
         }
+    }
+
+    MPI_Comm getComm(){
+        return coupling_strategy->getComm();
     }
 };
