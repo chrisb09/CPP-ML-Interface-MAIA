@@ -51,10 +51,10 @@ public:
 
     // Run the inference using the coupling strategy.
     void inference(std::vector<std::vector<double>>& input_fields_pre, 
-                   std::vector<std::vector<double>>& output_fields_post);
+                   std::vector<double>& output_fields_post);
 
     // Post-process the output fields.
-    void postprocess_output(std::vector<std::vector<double>>& output_fields_post, 
+    void postprocess_output(std::vector<double>& output_fields_post, 
                             std::vector<double*>& output_fields);
 
     // Free allocated resources.
@@ -70,7 +70,7 @@ public:
     std::vector<int> linspace_int(int start, int end, int count);
 
     // Helper: extract cubes from a 3D field array.
-    std::vector<std::vector<double>> extract_cubes(const double* data, int Nx, int Ny, int Nz, int cubeD);
+    std::vector<std::vector<double>> extract_cubes(const double* data, int Nx, int Ny, int Nz, int cubeD, int concatX, int concatY, int concatZ);
 };
 
 #endif // ML_COUPLING_MAIA_HPP

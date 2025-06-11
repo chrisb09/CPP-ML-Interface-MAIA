@@ -6,6 +6,7 @@
 #include <string>
 #include <cstdlib>       // for malloc/free
 #include <mpi.h>
+#include <cstring>
 
 // Include the external C header.
 extern "C" {
@@ -60,7 +61,7 @@ void MLCouplingStrategyPhyDll::setup(std::vector<int> nCells, std::vector<int> n
     phydll_define_phy(1, fieldSize * this->sequenceLen);
 
 
-    int* metaInfoField = (int*) malloc(7 * sizeof(int));
+    int* metaInfoField = (int*) malloc(8 * sizeof(int));
     metaInfoField[0] =  this->nCells[0]; 
     metaInfoField[1] =  this->nCells[1];
     metaInfoField[2] =  this->nCells[2];
@@ -68,13 +69,14 @@ void MLCouplingStrategyPhyDll::setup(std::vector<int> nCells, std::vector<int> n
     metaInfoField[4] =  this->nOffsetCells[0];
     metaInfoField[5] =  this->nOffsetCells[1];
     metaInfoField[6] =  this->nOffsetCells[2];
+    metaInfoField[7] =  this->fieldSize;
 
     int ndest = phydll_get_ndest();
     int* dest = phydll_get_dest();
 
     //Send meta information to python
     int own_rank;
-    MPI_Comm_rank(comm, &own_rank);
+    MPI_Comm_rank(MPI_COMM_WORLD, &own_rank);
     std::cout << "Own rank: " << own_rank << ", ndest: " << ndest << std::endl;
     std::cout << "Destinations: ";
     for(int i = 0; i < ndest; ++i) {
@@ -84,7 +86,7 @@ void MLCouplingStrategyPhyDll::setup(std::vector<int> nCells, std::vector<int> n
     //MPI_Request* requests = (MPI_Request*) malloc(ndest * sizeof(MPI_Request));
     for(int i = 0; i < ndest; ++i){
         std::cout << "Sending meta information to destination: " << dest[i] << ". Own rank: " << own_rank << std::endl;
-        MPI_Send(metaInfoField, 7, MPI_INT, dest[i], own_rank, comm);//, &requests[i]);
+        MPI_Send(metaInfoField, 8, MPI_INT, dest[i], own_rank, MPI_COMM_WORLD);//, &requests[i]);
     }
     //MPI_Waitall(ndest, requests, MPI_STATUSES_IGNORE);
     std::cout << "Before free requests." << std::endl;
@@ -94,7 +96,7 @@ void MLCouplingStrategyPhyDll::setup(std::vector<int> nCells, std::vector<int> n
 
 void MLCouplingStrategyPhyDll::inference(
     std::vector<std::vector<double>>& input_fields,
-    std::vector<std::vector<double>>& output_fields) 
+    std::vector<double>& output_fields) 
 {
     sendFields(input_fields);
     receiveFields(output_fields);
@@ -111,18 +113,17 @@ void MLCouplingStrategyPhyDll::sendFields(std::vector<std::vector<double>>& inpu
         std::copy(input_fields_pre[t].begin(),
                 input_fields_pre[t].end(),
                 transformer_input.begin());
-        //double* field_data = input_fields_pre[t].data();
-        //phydll_set_field(field_data, (char*) this->phyLabels[t].c_str());
-    double* ptr = transformer_input.data();
-    phydll_set_field(&ptr, (char*)"Python-DL-FIELD-INPUT");
+                
+        double* ptr = transformer_input.data();
+        phydll_set_field(&ptr, (char*)"Python-DL-FIELD-INPUT");
 
-    phydll_send();
+        phydll_send();
     }
 
     // Set one field, reshape is [sequenceLen, vectorLen]
 }
 
-void MLCouplingStrategyPhyDll::receiveFields(std::vector<std::vector<double>>& output_fields_post) {
+void MLCouplingStrategyPhyDll::receiveFields(std::vector<double>& output_fields_post) {
     phydll_recv();
     
     std::cout << "after phydllrecv" << std::endl;

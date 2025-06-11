@@ -150,33 +150,72 @@ def main():
             displacements_per_process[-1] + num_cells_per_process[pid - 1]
         )
 
+    count = 0
+    flat = []
     while dll.is_phy_signal():
+        count+=1
         fields = dll.recv()
-
-        flat = fields["Python-DL-FIELD-INPUT"]
+        print(list(fields.keys()))
+        print(fields)
+        flat.extend(fields["Python-DL-FIELD-INPUT"])
+        if count < sequence_len:
+            continue 
         print(flat)
         print(flat.shape)
-        assert len(flat) == sequence_len * num_cells_per_process * num_phy_procs
+        print(sequence_len )
+        print(num_cells_per_process)
+        print(num_phy_procs)
+        # len(flat) == sum(num_cells_per_process)
 
-        inputs = torch.tensor(flat, dtype=torch.float32, device=device).reshape(sequence_len, num_cells_per_process * num_phy_procs)
+        offset = 0
+        #for pid in range(num_phy_procs):
+        #assert len(flat) == sequence_len * num_cells_per_process * num_phy_procs
 
-        # Run model inference
-        #Input is [sequence_len, num_cubes * 3 * cubeD * cubeD * cubeD]
-        with torch.no_grad():
-            predictions = run_encoder_decoder_inference(
-                device=device,
-                model=model,
-                src=inputs,
-                forecast_window=forecast_window,
-                batch_size=inputs.shape[1],
-                batch_first=False
-            )
-        print(predictions)
-        print(predictions.shape)
-        output = predictions[1].detach().cpu().numpy()
-        field = {"Python-DL-FIELD-OUTPUT": output}
-        dll.set_field(output, field)
-        dll.send(field)  
+
+        # Step 2: Split data per process
+        split_points = np.cumsum(num_cells_per_process)[:-1]
+        per_proc_flat_data = np.split(np.array(flat), split_points)
+
+        # Step 3: Reshape each chunk into [sequenceLen, vectorLen]
+        #input_fields_per_proc = []
+        curr_pos = 0
+        for pid, flat in enumerate(per_proc_flat_data):
+            vectorLen = num_cells_per_process[pid] // sequence_len
+            reshaped = flat.reshape(sequence_len, vectorLen)
+            #input_fields_per_proc.append(reshaped)
+            print(reshaped.shape)
+            print(reshaped.shape)
+
+            inputs = torch.tensor(flat, dtype=torch.float32, device=device).reshape(sequence_len, num_cells_per_process * num_phy_procs)
+            print(inputs.shape)
+            #inputs = torch.stack(cubes_tensors[seq_idx+1:] + cubes_tensors[:seq_idx+1])
+            inputs = inputs.reshape(sequence_len, inputs.shape[1]*inputs.shape[2], cubeD, cubeD, cubeD)
+            print(inputs.shape)
+            inputs = inputs.reshape(*inputs.size()[:-3], -1)
+            print(inputs.shape)
+            # Run model inference
+            #Input is [sequence_len, num_cubes * 3 * cubeD * cubeD * cubeD]
+            with torch.no_grad():
+                predictions = run_encoder_decoder_inference(
+                    device=device,
+                    model=model,
+                    src=inputs,
+                    forecast_window=forecast_window,
+                    batch_size=inputs.shape[1],
+                    batch_first=False
+                )
+            print(predictions)
+            print(predictions.shape)
+            print(f"predictions: {predictions.shape}", flush=True)
+            out = predictions[1].view(-1).detach().cpu().numpy()
+            print(f"out: {out.shape}")
+            dl_fields["Python-DL-FIELD-OUTPUT"][curr_pos:curr_pos+vectorLen] = out
+            curr_pos = curr_pos + vectorLen
+        print(f"dlfields: {len(dl_fields["Python-DL-FIELD-OUTPUT"])}", flush=True)
+        
+        dll.send(dl_fields)  
+        count = 0
+        flat = []
 
     dll.finalize()
 
