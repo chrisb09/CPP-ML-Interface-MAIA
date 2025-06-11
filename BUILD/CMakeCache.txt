@@ -78,7 +78,7 @@ CMAKE_EXPORT_COMPILE_COMMANDS:BOOL=
 CMAKE_FIND_PACKAGE_REDIRECTS_DIR:STATIC=/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/BUILD/CMakeFiles/pkgRedirects
 
 //Install path prefix, prepended onto install directories.
-CMAKE_INSTALL_PREFIX:PATH=/usr/local
+CMAKE_INSTALL_PREFIX:PATH=/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/BUILD
 
 //Path to a program.
 CMAKE_LINKER:FILEPATH=/cvmfs/software.hpc.rwth.de/Linux/RH9/x86_64/intel/sapphirerapids/software/binutils/2.42-GCCcore-13.3.0/bin/ld

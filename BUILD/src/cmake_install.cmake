@@ -2,7 +2,7 @@
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "/usr/local")
+  set(CMAKE_INSTALL_PREFIX "/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/BUILD")
 endif()
 string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 
@@ -43,34 +43,33 @@ if(NOT DEFINED CMAKE_OBJDUMP)
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  if(EXISTS "$ENV{DESTDIR}/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/BUILD/lib/libmlCoupling.so" AND
-     NOT IS_SYMLINK "$ENV{DESTDIR}/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/BUILD/lib/libmlCoupling.so")
+  if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libmlCoupling.so" AND
+     NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libmlCoupling.so")
     file(RPATH_CHECK
-         FILE "$ENV{DESTDIR}/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/BUILD/lib/libmlCoupling.so"
+         FILE "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libmlCoupling.so"
          RPATH "")
   endif()
-  list(APPEND CMAKE_ABSOLUTE_DESTINATION_FILES
-   "/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/BUILD/lib/libmlCoupling.so")
-  if(CMAKE_WARN_ON_ABSOLUTE_INSTALL_DESTINATION)
-    message(WARNING "ABSOLUTE path INSTALL DESTINATION : ${CMAKE_ABSOLUTE_DESTINATION_FILES}")
-  endif()
-  if(CMAKE_ERROR_ON_ABSOLUTE_INSTALL_DESTINATION)
-    message(FATAL_ERROR "ABSOLUTE path INSTALL DESTINATION forbidden (by caller): ${CMAKE_ABSOLUTE_DESTINATION_FILES}")
-  endif()
-  file(INSTALL DESTINATION "/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/BUILD/lib" TYPE SHARED_LIBRARY FILES "/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/BUILD/src/libmlCoupling.so")
-  if(EXISTS "$ENV{DESTDIR}/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/BUILD/lib/libmlCoupling.so" AND
-     NOT IS_SYMLINK "$ENV{DESTDIR}/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/BUILD/lib/libmlCoupling.so")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE SHARED_LIBRARY FILES "/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/BUILD/src/libmlCoupling.so")
+  if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libmlCoupling.so" AND
+     NOT IS_SYMLINK "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libmlCoupling.so")
     file(RPATH_CHANGE
-         FILE "$ENV{DESTDIR}/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/BUILD/lib/libmlCoupling.so"
+         FILE "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libmlCoupling.so"
          OLD_RPATH "/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/extern/phydll/BUILD/lib:"
          NEW_RPATH "")
     if(CMAKE_INSTALL_DO_STRIP)
-      execute_process(COMMAND "/cvmfs/software.hpc.rwth.de/Linux/RH9/x86_64/intel/sapphirerapids/software/binutils/2.42-GCCcore-13.3.0/bin/strip" "$ENV{DESTDIR}/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/BUILD/lib/libmlCoupling.so")
+      execute_process(COMMAND "/cvmfs/software.hpc.rwth.de/Linux/RH9/x86_64/intel/sapphirerapids/software/binutils/2.42-GCCcore-13.3.0/bin/strip" "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/libmlCoupling.so")
     endif()
   endif()
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+endif()
+
+if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/include" TYPE DIRECTORY FILES
+    "/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/src/ml_coupling"
+    "/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/src/ml_coupling_strategy"
+    FILES_MATCHING REGEX "/[^/]*\\.hpp$")
 endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT

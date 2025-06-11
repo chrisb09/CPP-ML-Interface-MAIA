@@ -4,7 +4,7 @@
 # compile CXX with /cvmfs/software.hpc.rwth.de/Linux/RH9/x86_64/intel/sapphirerapids/software/GCCcore/13.3.0/bin/g++
 CXX_DEFINES = -DmlCouplingLib_EXPORTS
 
-CXX_INCLUDES = -I/test -I/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/extern/phydll/BUILD/include
+CXX_INCLUDES = -I/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/extern/phydll/BUILD/include -I/rwthfs/rz/cluster/home/cb292517/MA/cpp-ml-interface/src
 
 CXX_FLAGS = -std=gnu++17 -fPIC -DWITH_PHYDLL
 
