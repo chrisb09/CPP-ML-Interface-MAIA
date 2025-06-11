@@ -305,19 +305,6 @@ void MLCouplingMaia::ml_step(){
     }
 }
 
-    // Helper: linspace equivalent in C++ to generate integer evenly spaced points like numpy.linspace(0, end, count)
-std::vector<int> MLCouplingMaia::linspace_int(int start, int end, int count) {
-    std::vector<int> result;
-    if (count <= 1) {
-        result.push_back(start);
-        return result;
-    }
-    double step = static_cast<double>(end - start) / (count - 1);
-    for (int i = 0; i < count; ++i) {
-        result.push_back(static_cast<int>(std::round(start + i * step)));
-    }
-    return result;
-}
 
 std::vector<int> MLCouplingMaia::linspace(int start, int end, int count) {
     std::vector<int> result(count);

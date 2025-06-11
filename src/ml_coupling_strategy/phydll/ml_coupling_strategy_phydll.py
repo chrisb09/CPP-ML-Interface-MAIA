@@ -89,7 +89,7 @@ def main():
         cubes_per_process[pid] = [None] * sequence_len
         field_shape_per_process[pid] = (meta_info_field[pid][0], meta_info_field[pid][1], meta_info_field[pid][2])
         #num_cells_per_process.append(math.prod(field_shape_per_process[pid]))
-        num_cells_per_process.append(meta_info_field[7])
+        num_cells_per_process.append(meta_info_field[pid][7])
         #print(f"PHYDLL: cells of process = {num_cells_per_process[pid]}")
 
     ##################
@@ -153,19 +153,24 @@ def main():
 
     count = 0
     flat = []
+    dl_fields = {"Python-DL-FIELD-OUTPUT": np.zeros(sum(num_cells_per_process)),}
     while dll.is_phy_signal():
         count+=1
         fields = dll.recv()
         print(list(fields.keys()))
         print(fields)
+        print(count)
+        print(len(flat))
         flat.extend(fields["Python-DL-FIELD-INPUT"])
+        print(count < sequence_len, flush=True)
         if count < sequence_len:
             continue 
-        print(flat)
-        print(flat.shape)
-        print(sequence_len )
-        print(num_cells_per_process)
-        print(num_phy_procs)
+        count = 0
+        #print(flat,flush=True)
+        #print(flat,flush=True)
+        print(sequence_len ,flush=True)
+        print(num_cells_per_process,flush=True)
+        print(num_phy_procs,flush=True)
         # len(flat) == sum(num_cells_per_process)
 
         offset = 0
@@ -187,10 +192,10 @@ def main():
             print(reshaped.shape)
             print(reshaped.shape)
 
-            inputs = torch.tensor(flat, dtype=torch.float32, device=device).reshape(sequence_len, num_cells_per_process * num_phy_procs)
+            inputs = torch.tensor(reshaped, dtype=torch.float32, device=device)#.reshape(sequence_len, vectorLen)
             print(inputs.shape)
             #inputs = torch.stack(cubes_tensors[seq_idx+1:] + cubes_tensors[:seq_idx+1])
-            inputs = inputs.reshape(sequence_len, inputs.shape[1]*inputs.shape[2], cubeD, cubeD, cubeD)
+            inputs = inputs.reshape(sequence_len, int(vectorLen / (cubeD**3)), cubeD, cubeD, cubeD)
             print(inputs.shape)
             inputs = inputs.reshape(*inputs.size()[:-3], -1)
             print(inputs.shape)
@@ -215,7 +220,7 @@ def main():
         print(f"dlfields: {len(dl_fields["Python-DL-FIELD-OUTPUT"])}", flush=True)
         
         dll.send(dl_fields)  
-        count = 0
+        
         flat = []
 
     dll.finalize()

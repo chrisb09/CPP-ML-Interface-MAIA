@@ -165,7 +165,8 @@ void MLCouplingStrategyPhyDll::sendFields(std::vector<std::vector<double>>& inpu
                 input_fields_pre[t].end(),
                 transformer_input.begin());
                 
-        double* ptr = transformer_input.data();
+        double* ptr = transformer_input.data();  
+        std::cout << "Sending " << transformer_input.size() << " doubles "<< std::endl;
         phydll_set_field(&ptr, (char*)"Python-DL-FIELD-INPUT");
 
         phydll_send();
