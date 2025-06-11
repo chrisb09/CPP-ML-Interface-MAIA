@@ -8,7 +8,7 @@
 
 class MLCouplingStrategyPhyDll : public MLCouplingStrategy<
     std::vector<std::vector<double>>, 
-    std::vector<std::vector<double>>
+    std::vector<double>
 >
 {
 public:
@@ -29,7 +29,7 @@ public:
 
     // Executes inference by sending input fields and receiving output fields.
     void inference(std::vector<std::vector<double>>& input_fields,
-                   std::vector<std::vector<double>>& output_fields) override;
+                   std::vector<double>& output_fields) override;
 
     // Finalizes the coupling strategy.
     void finalize() override;
@@ -41,7 +41,7 @@ public:
     void sendFields(std::vector<std::vector<double>>& input_fields_pre);
 
     // (Optional) Receive output fields via PhyDll.
-    void receiveFields(std::vector<std::vector<double>>& output_fields_post);
+    void receiveFields(std::vector<double>& output_fields_post);
 
 private:
     std::vector<std::string> phyLabels;
@@ -55,6 +55,9 @@ private:
     int nGhostLayers;
     int fieldSize;
     int sequenceLen;
+
+    int num_cubes;
+    int cube_volume;
 };
 
 #endif // ML_COUPLING_STRATEGY_PHYDLL_HPP

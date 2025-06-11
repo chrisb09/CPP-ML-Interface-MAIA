@@ -64,9 +64,9 @@ void MLCouplingMaia::setup(
     this->nOffsetCells[2] =  nOffsetCells[2];       
 
     
-    concatX = static_cast<int>(std::ceil(static_cast<double>(this->nCells[0]) / cubeD));
+    concatX = static_cast<int>(std::ceil(static_cast<double>(this->nCells[2]) / cubeD));
     concatY = static_cast<int>(std::ceil(static_cast<double>(this->nCells[1]) / cubeD));
-    concatZ = static_cast<int>(std::ceil(static_cast<double>(this->nCells[2]) / cubeD));
+    concatZ = static_cast<int>(std::ceil(static_cast<double>(this->nCells[1]) / cubeD));
     
     //Save where the inputs and also outputs are in maia
     input_fields.clear();
@@ -319,7 +319,7 @@ std::vector<int> MLCouplingMaia::linspace_int(int start, int end, int count) {
     return result;
 }
 
-std::vector<int> linspace(int start, int end, int count) {
+std::vector<int> MLCouplingMaia::linspace(int start, int end, int count) {
     std::vector<int> result(count);
     double step = (end - start) / static_cast<double>(std::max(count - 1, 1));
     for (int i = 0; i < count; ++i) {

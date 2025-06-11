@@ -58,6 +58,7 @@ private:
 
     int num_cubes;
     int cube_volume;
+    int total_elements;
 };
 
 #endif // ML_COUPLING_STRATEGY_PHYDLL_HPP

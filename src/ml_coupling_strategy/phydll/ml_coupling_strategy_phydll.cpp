@@ -7,6 +7,7 @@
 #include <cstdlib>       // for malloc/free
 #include <mpi.h>
 #include <cstring>
+#include <math.h>
 
 // Include the external C header.
 extern "C" {
@@ -57,8 +58,58 @@ void MLCouplingStrategyPhyDll::setup(std::vector<int> nCells, std::vector<int> n
     phydll_opt_set_freq(1);
     phydll_opt_set_output_freq(1);
 
+
+    int cubeD = 8;
+    
+    int concatX = static_cast<int>(std::ceil(static_cast<double>(this->nCells[2]) / cubeD));
+    int concatY = static_cast<int>(std::ceil(static_cast<double>(this->nCells[1]) / cubeD));
+    int concatZ = static_cast<int>(std::ceil(static_cast<double>(this->nCells[0]) / cubeD));
+
+    // === Inline linspace logic for Z ===
+    std::vector<int> zs(concatZ);
+    if (concatZ == 1) {
+        zs[0] = 0;
+    } else {
+        double step = static_cast<double>(this->nCells[0] - cubeD) / (concatZ - 1);
+        for (int i = 0; i < concatZ; ++i) {
+            zs[i] = static_cast<int>(std::round(i * step));
+        }
+    }
+    zs.insert(zs.begin(), 0); // Add origin cube
+
+    // === Inline linspace logic for Y ===
+    std::vector<int> ys(concatY);
+    if (concatY == 1) {
+        ys[0] = 0;
+    } else {
+        double step = static_cast<double>(this->nCells[1] - cubeD) / (concatY - 1);
+        for (int i = 0; i < concatY; ++i) {
+            ys[i] = static_cast<int>(std::round(i * step));
+        }
+    }
+    ys.insert(ys.begin(), 0); // Add origin cube
+
+    // === Inline linspace logic for X ===
+    std::vector<int> xs(concatX);
+    if (concatX == 1) {
+        xs[0] = 0;
+    } else {
+        double step = static_cast<double>(this->nCells[0] - cubeD) / (concatX - 1);
+        for (int i = 0; i < concatX; ++i) {
+            xs[i] = static_cast<int>(std::round(i * step));
+        }
+    }
+    xs.insert(xs.begin(), 0); // Add origin cube
+
+    // === Count total cubes and calculate total elements ===
+    this->num_cubes = zs.size() * ys.size() * xs.size();
+    this->cube_volume = cubeD * cubeD * cubeD;
+    this->total_elements = this->sequenceLen * this->nFields * num_cubes * cube_volume;
+
+
+
     // define physical solver instance
-    phydll_define_phy(1, fieldSize * this->sequenceLen);
+    phydll_define_phy(1, this->nFields * num_cubes * cube_volume);
 
 
     int* metaInfoField = (int*) malloc(8 * sizeof(int));
@@ -69,7 +120,7 @@ void MLCouplingStrategyPhyDll::setup(std::vector<int> nCells, std::vector<int> n
     metaInfoField[4] =  this->nOffsetCells[0];
     metaInfoField[5] =  this->nOffsetCells[1];
     metaInfoField[6] =  this->nOffsetCells[2];
-    metaInfoField[7] =  this->fieldSize;
+    metaInfoField[7] =  this->total_elements;
 
     int ndest = phydll_get_ndest();
     int* dest = phydll_get_dest();

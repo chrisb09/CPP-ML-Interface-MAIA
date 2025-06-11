@@ -75,7 +75,7 @@ def main():
     #requests = []
     for i, dest in enumerate(dests):
         print(f"PHYDLL: requesting meta info from process {dest}", flush=True)
-        tmp = np.empty(7, dtype=np.int32)
+        tmp = np.empty(8, dtype=np.int32)
         globalComm.Recv(tmp, source=dest, tag=dest)
         meta_info_field.append(tmp)
         #requests.append(req)
@@ -88,7 +88,8 @@ def main():
     for pid in range(num_phy_procs):
         cubes_per_process[pid] = [None] * sequence_len
         field_shape_per_process[pid] = (meta_info_field[pid][0], meta_info_field[pid][1], meta_info_field[pid][2])
-        num_cells_per_process.append(math.prod(field_shape_per_process[pid]))
+        #num_cells_per_process.append(math.prod(field_shape_per_process[pid]))
+        num_cells_per_process.append(meta_info_field[7])
         #print(f"PHYDLL: cells of process = {num_cells_per_process[pid]}")
 
     ##################

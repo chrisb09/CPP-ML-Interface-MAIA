@@ -71,6 +71,8 @@ public:
 
     // Helper: extract cubes from a 3D field array.
     std::vector<std::vector<double>> extract_cubes(const double* data, int Nx, int Ny, int Nz, int cubeD, int concatX, int concatY, int concatZ);
+
+    std::vector<int> linspace(int start, int end, int count);
 };
 
 #endif // ML_COUPLING_MAIA_HPP

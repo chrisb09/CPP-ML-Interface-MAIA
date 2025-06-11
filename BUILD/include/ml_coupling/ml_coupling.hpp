@@ -14,9 +14,9 @@ protected:
     std::vector<T*> output_fields;
 
     std::vector<ProcessedType> input_fields_pre;
-    std::vector<ProcessedType> output_fields_post;
+    std::vector<T> output_fields_post;
 
-    MLCouplingStrategy<std::vector<ProcessedType>, std::vector<ProcessedType>>* coupling_strategy = nullptr;
+    MLCouplingStrategy<std::vector<ProcessedType>, std::vector<T>>* coupling_strategy = nullptr;
     int coupling_strategy_id;
 
     std::string model_path;
@@ -45,9 +45,9 @@ public:
 
     virtual void preprocess_input(std::vector<T*>& input, std::vector<ProcessedType>& input_pre) = 0;
 
-    virtual void inference(std::vector<ProcessedType>& input_pre, std::vector<ProcessedType>& output_post) = 0; 
+    virtual void inference(std::vector<ProcessedType>& input_pre, std::vector<T>& output_post) = 0; 
 
-    virtual void postprocess_output(std::vector<ProcessedType>& output_post, std::vector<T*>& output) = 0;
+    virtual void postprocess_output(std::vector<T>& output_post, std::vector<T*>& output) = 0;
 
     virtual void finalize() = 0;
 
