@@ -61,46 +61,55 @@ void MLCouplingStrategyPhyDll::setup(std::vector<int> nCells, std::vector<int> n
 
 
     int cubeD = 8;
-    
-    int concatX = static_cast<int>(std::ceil(static_cast<double>(this->nCells[2]) / cubeD));
-    int concatY = static_cast<int>(std::ceil(static_cast<double>(this->nCells[1]) / cubeD));
-    int concatZ = static_cast<int>(std::ceil(static_cast<double>(this->nCells[0]) / cubeD));
+
+    // Adjusted cell counts excluding ghost layers
+    int Nx = this->nCells[2] - 2 * nGhostLayers;
+    int Ny = this->nCells[1] - 2 * nGhostLayers;
+    int Nz = this->nCells[0] - 2 * nGhostLayers;
+
+    // Compute number of cubes based on interior only
+    int concatX = static_cast<int>(std::ceil(static_cast<double>(Nx) / cubeD));
+    int concatY = static_cast<int>(std::ceil(static_cast<double>(Ny) / cubeD));
+    int concatZ = static_cast<int>(std::ceil(static_cast<double>(Nz) / cubeD));
 
     // === Inline linspace logic for Z ===
     std::vector<int> zs(concatZ);
     if (concatZ == 1) {
         zs[0] = 0;
     } else {
-        double step = static_cast<double>(this->nCells[0] - cubeD) / (concatZ - 1);
+        double step = static_cast<double>(Nz  - cubeD) / (concatZ - 1);
         for (int i = 0; i < concatZ; ++i) {
             zs[i] = static_cast<int>(std::round(i * step));
         }
     }
     zs.insert(zs.begin(), 0); // Add origin cube
+    for (int& z : zs) z += nGhostLayers; // offset to interior position in full domain
 
     // === Inline linspace logic for Y ===
     std::vector<int> ys(concatY);
     if (concatY == 1) {
         ys[0] = 0;
     } else {
-        double step = static_cast<double>(this->nCells[1] - cubeD) / (concatY - 1);
+        double step = static_cast<double>(Ny - cubeD) / (concatY - 1);
         for (int i = 0; i < concatY; ++i) {
             ys[i] = static_cast<int>(std::round(i * step));
         }
     }
     ys.insert(ys.begin(), 0); // Add origin cube
+    for (int& y : ys) y += nGhostLayers;
 
     // === Inline linspace logic for X ===
     std::vector<int> xs(concatX);
     if (concatX == 1) {
         xs[0] = 0;
     } else {
-        double step = static_cast<double>(this->nCells[0] - cubeD) / (concatX - 1);
+        double step = static_cast<double>(Nx - cubeD) / (concatX - 1);
         for (int i = 0; i < concatX; ++i) {
             xs[i] = static_cast<int>(std::round(i * step));
         }
     }
     xs.insert(xs.begin(), 0); // Add origin cube
+    for (int& x : xs) x += nGhostLayers;
 
     // === Count total cubes and calculate total elements ===
     this->num_cubes = zs.size() * ys.size() * xs.size();
@@ -160,7 +169,7 @@ void MLCouplingStrategyPhyDll::sendFields(std::vector<std::vector<double>>& inpu
     int sequenceLen = input_fields_pre.size();
     int vectorLen = input_fields_pre[0].size();
 
-    std::vector<double> transformer_input(sequenceLen * vectorLen);
+    std::vector<double> transformer_input(vectorLen);
     for (int t = 0; t < sequenceLen; ++t) {
         std::copy(input_fields_pre[t].begin(),
                 input_fields_pre[t].end(),

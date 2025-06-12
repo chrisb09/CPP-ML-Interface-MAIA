@@ -270,7 +270,12 @@ void MLCouplingMaia::setup(
     output_fields.clear();
     for(size_t i = 0; i < nFields; i++){
         input_fields.push_back(input_fields_ptr[i]);  
-        output_fields.push_back(output_fields_ptr[i]);  
+        std::cout << "input_fields_ptr ptr " << input_fields_ptr[i] << std::endl;
+        std::cout << "input_fields " << input_fields[i] << std::endl;
+        
+        output_fields.push_back(output_fields_ptr[i]); 
+        std::cout << "outputfield ptr " << output_fields_ptr[i] << std::endl;
+        std::cout << "outputfield " << output_fields[i] << std::endl;
     }
 
     coupling_strategy->setup(this->nCells, this->nOffsetCells, nFields, this->nGhostLayers, fieldSize, this->app_comm, sequenceLen);
@@ -281,13 +286,34 @@ void MLCouplingMaia::preprocess_input(
     std::vector<std::vector<double>>& input_fields_pre)
 {
     std::vector<std::vector<double>> field_cubes(3); // [field][num_cubes * cubeD³]
-    int concatX = (nCells[2] + cubeD - 1) / cubeD;
-    int concatY = (nCells[1] + cubeD - 1) / cubeD;
-    int concatZ = (nCells[0] + cubeD - 1) / cubeD;
+    int zSize = nCells[0] - 2 * nGhostLayers;
+    int ySize = nCells[1] - 2 * nGhostLayers;
+    int xSize = nCells[2] - 2 * nGhostLayers;
+    
+    double sum = 0.0;
+    for (double* vol : input_fields) {
+        sum += std::accumulate(vol, vol + xSize * ySize * zSize, 0.0);
+    }
+    std::cout << "Checksum of input_fields: " << sum << std::endl;
+
+    int concatX = (xSize + cubeD - 1) / cubeD;
+    int concatY = (ySize + cubeD - 1) / cubeD;
+    int concatZ = (zSize + cubeD - 1) / cubeD;
     std::cout << "input_fields is: " << input_fields.size() << std::endl;
     // Extract cubes for u, v, w
     for (int f = 0; f < 3; ++f) {
-        auto cubes = extract_cubes(input_fields[f], nCells[2], nCells[1], nCells[0], cubeD, concatX, concatY, concatZ);
+        std::vector<double> trimmed_data;
+        trimmed_data.reserve(xSize * ySize * zSize);
+        // Flattened index access: input_fields[f] is of size nCells[0]*nCells[1]*nCells[2]
+        for (int z = nGhostLayers; z < nCells[0] - nGhostLayers; ++z) {
+            for (int y = nGhostLayers; y < nCells[1] - nGhostLayers; ++y) {
+                for (int x = nGhostLayers; x < nCells[2] - nGhostLayers; ++x) {
+                    size_t idx = (z * nCells[1] * nCells[2]) + (y * nCells[2]) + x;
+                    trimmed_data.push_back(input_fields[f][idx]);
+                }
+            }
+        }
+        auto cubes = extract_cubes(trimmed_data.data(), xSize, ySize, zSize, cubeD, concatX, concatY, concatZ);
         for (const auto& cube : cubes) {
             field_cubes[f].insert(field_cubes[f].end(), cube.begin(), cube.end());
         }
@@ -296,7 +322,7 @@ void MLCouplingMaia::preprocess_input(
     // Interleave into [num_cubes * 3 * cubeD³]
     size_t num_cubes = field_cubes[0].size() / (cubeD * cubeD * cubeD);
     std::vector<double> flat;
-
+    flat.reserve(num_cubes * 3 * cubeD * cubeD * cubeD);
     for (size_t i = 0; i < num_cubes; ++i) {
         for (int f = 0; f < 3; ++f) {
             flat.insert(flat.end(),
@@ -326,6 +352,18 @@ void MLCouplingMaia::postprocess_output(
     std::vector<double>& output_fields_post,  // Flat, interleaved data (all cubes)
     std::vector<double*>& output_fields)        // Output: three reconstructed full volumes
 {
+    for(size_t i = 0; i < nFields; i++){
+        std::cout << "outputfield " << output_fields[i] << std::endl;
+    }
+    std::cout << "------------------------------------------------" << std::endl;
+    std::cout << "output_fields[" << 0 << "] address: " << static_cast<void*>(output_fields[0]) << std::endl;
+    std::cout << "Sample from output_fields_post:" << std::endl;
+    for (size_t i = 0; i < std::min(size_t(10), output_fields_post.size()); ++i) {
+        std::cout << output_fields_post[i] << " ";
+    }
+    double sum = std::accumulate(output_fields_post.begin(), output_fields_post.end(), 0.0);
+    std::cout << "Checksum of output_fields_post: " << sum << std::endl;
+    std::cout << std::endl;
     std::cout << "post process outputfields_post front: " << output_fields_post.front() << std::endl;
     std::cout << "post process outputfields_post back: " << output_fields_post.back() << std::endl;
     std::cout << "post process output_fields front: " << *(output_fields.front()) << std::endl;
@@ -337,9 +375,14 @@ void MLCouplingMaia::postprocess_output(
     // Note: In extract_cubes we used:
     //   Nx = nCells[2], Ny = nCells[1], Nz = nCells[0]
     
-    int Nx = nCells[2];
-    int Ny = nCells[1];
-    int Nz = nCells[0];
+    int NxFull = nCells[2];
+    int NyFull = nCells[1];
+    int NzFull = nCells[0];
+
+    int Nx = NxFull - 2 * nGhostLayers;
+    int Ny = NyFull - 2 * nGhostLayers;
+    int Nz = NzFull - 2 * nGhostLayers;
+
     size_t volumeSize = static_cast<size_t>(Nx * Ny * Nz);
     const int numFields = 3;  // for example, u, v, w
 
@@ -409,13 +452,20 @@ void MLCouplingMaia::postprocess_output(
             );
         }
     }
-
+    sum = std::accumulate(field_cubes[0].begin(), field_cubes[0].end(), 0.0);
+    std::cout << "Checksum of field_cubes[0]: " << sum << std::endl;
+    std::cout << "First 5 values of each field after deinterleaving:\n";
+    for (int f = 0; f < numFields; ++f) {
+        for (int i = 0; i < 5 && i < field_cubes[f].size(); ++i)
+            std::cout << field_cubes[f][i] << " ";
+        std::cout << std::endl;
+    }
     // ------------------------------------------------------------------------
     // Step 2. Reconstruct full volumes (for each field)
     // ------------------------------------------------------------------------
 
     // Prepare the weight grid (to count contributions at each voxel)
-    std::vector<double> weight(volumeSize, 0.0);
+    std::vector<double> weight(NxFull * NyFull * NzFull, 0.0);
 
     // Recompute the extraction starting positions (xs, ys, zs)
     //
@@ -433,7 +483,11 @@ void MLCouplingMaia::postprocess_output(
     auto zs = linspace(0, Nz - cubeD, concatZ);
     xs.insert(xs.begin(), 0);
     ys.insert(ys.begin(), 0);
-    zs.insert(zs.begin(), 0);
+    zs.insert(zs.begin(), 0);  
+    
+    //for (int& x : xs) x += nGhostLayers;
+    //for (int& y : ys) y += nGhostLayers;
+    //for (int& z : zs) z += nGhostLayers;
 
     // Build the weight grid by “painting” one cube at each starting position.
     for (int z0 : zs) {
@@ -443,11 +497,11 @@ void MLCouplingMaia::postprocess_output(
                 for (int dz = 0; dz < cubeD; ++dz) {
                     for (int dy = 0; dy < cubeD; ++dy) {
                         for (int dx = 0; dx < cubeD; ++dx) {
-                            int global_x = x0 + dx;
-                            int global_y = y0 + dy;
-                            int global_z = z0 + dz;
-                            if (global_x < Nx && global_y < Ny && global_z < Nz) {
-                                int vol_index = global_z * (Ny * Nx) + global_y * Nx + global_x;
+                            int global_x = x0 + dx + nGhostLayers;
+                            int global_y = y0 + dy + nGhostLayers;
+                            int global_z = z0 + dz + nGhostLayers;
+                            if (global_x < NxFull && global_y < NyFull && global_z < NzFull) {
+                                int vol_index = global_z * (NyFull * NxFull) + global_y * NxFull + global_x;
                                 weight[vol_index] += 1.0;
                             }
                         }
@@ -461,9 +515,11 @@ void MLCouplingMaia::postprocess_output(
     {
         // Use the preallocated pointer from output_fields[i] (already set in setup())
         double* vol = output_fields[f];  // pointer already points to pvariables[i]
-        std::fill(vol, vol + volumeSize, 0.0);
+        std::fill(vol, vol + (NxFull * NyFull * NzFull), 0.0);
         // Do not push_back again! You're already using it.
     }
+    sum = std::accumulate(field_cubes[0].begin(), field_cubes[0].end(), 0.0);
+    std::cout << "Checksum of field_cubes[0]: " << sum << std::endl;
 
     // For each field, “stitch” the cubes back into the full volume.
     // The cubes were extracted (and later deinterleaved) in the same order as defined by
@@ -480,15 +536,33 @@ void MLCouplingMaia::postprocess_output(
                         for (int dy = 0; dy < cubeD; ++dy) {
                             for (int dx = 0; dx < cubeD; ++dx)
                             {
-                                int global_x = x0 + dx;
-                                int global_y = y0 + dy;
-                                int global_z = z0 + dz;
-                                if (global_x < Nx && global_y < Ny && global_z < Nz) {
-                                    int vol_index = global_z * (Ny * Nx) + global_y * Nx + global_x;
+                                int global_x = x0 + dx + nGhostLayers;
+                                int global_y = y0 + dy + nGhostLayers;
+                                int global_z = z0 + dz + nGhostLayers;
+                                if (global_x < NxFull && global_y < NyFull && global_z < NzFull) {
+                                    int vol_index = global_z * (NyFull * NxFull) + global_y * NxFull + global_x;
                                     int cube_offset = dz * cubeD * cubeD + dy * cubeD + dx;
+                                    if (vol_index >= NxFull * NyFull * NzFull) {
+                                        std::cerr << "ERROR: vol_index out of bounds: " << vol_index << " / " << NxFull * NyFull * NzFull << std::endl;
+                                    }
+                                    size_t flat_index = cubeIndex * cubeSize + cube_offset;
+                                    if (flat_index >= field_cubes[f].size()) {
+                                        std::cerr << "ERROR: field_cubes[" << f << "] index out of bounds: " << flat_index << " / " << field_cubes[f].size() << std::endl;
+                                    }
+                                    static int log_count = 0;
+                                    if (log_count < 10 && field_cubes[f][flat_index] != 0.0) {
+                                        std::cout << "Writing to output_fields[" << f << "][" << vol_index << "] = " << field_cubes[f][flat_index] << std::endl;
+                                        log_count++;
+                                    }
                                     // Accumulate the cube’s contribution.
                                     output_fields[f][vol_index] += 
                                         field_cubes[f][cubeIndex * cubeSize + cube_offset];
+                                        
+                                    static int log_count_1 = 0;
+                                    if (log_count_1 < 10 && output_fields[f][vol_index] != 0.0) {
+                                        std::cout << "Writing to output_fields[" << f << "][" << vol_index << "] = " << output_fields[f][vol_index] << std::endl;
+                                        log_count_1++;
+                                    }
                                 }
                             }
                         }
@@ -498,11 +572,22 @@ void MLCouplingMaia::postprocess_output(
             }
         }
         // Normalize the full volume by dividing each voxel by its contribution count.
-        for (size_t i = 0; i < volumeSize; ++i)
+        for (size_t i = 0; i < NxFull * NyFull * NzFull; ++i)
         {
             if (weight[i] > 0.0)
                 output_fields[f][i] /= weight[i];
         }
+    }
+    sum = std::accumulate(field_cubes[0].begin(), field_cubes[0].end(), 0.0);
+    std::cout << "Checksum of field_cubes[0]: " << sum << std::endl;
+    sum = 0.0;
+    for (double* vol : output_fields) {
+        sum += std::accumulate(vol, vol + NxFull * NyFull * NzFull, 0.0);
+    }
+    std::cout << "Checksum of output_fields: " << sum << std::endl;
+    
+    for(size_t i = 0; i < nFields; i++){
+        std::cout << "outputfield " << output_fields[i] << std::endl;
     }
     /*
     // TEST #################################
@@ -605,6 +690,7 @@ void MLCouplingMaia::ml_step(){
         iter = 0;
         
         input_fields_pre.clear();//Empty buffer
+        output_fields_post.clear();
     }
 }
 
