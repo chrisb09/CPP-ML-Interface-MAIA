@@ -40,7 +40,8 @@ public:
 				const std::string& modelPath,
 				int batchSize,
 				const std::vector<int>& nCells,
-				const std::vector<int>& nOffsetCells
+				const std::vector<int>& nOffsetCells,
+                int nGhostLayers
 				) = 0;
 
     virtual void preprocess_input(std::vector<T*>& input, std::vector<ProcessedType>& input_pre) = 0;

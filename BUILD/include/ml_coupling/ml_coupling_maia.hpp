@@ -18,7 +18,6 @@ class MLCouplingMaia : public MLCoupling<double, std::vector<double>>
 {
 protected:
     int irank = 0;
-    int nGhostLayers = 2;
     int nFields;
     int fieldSize;
 
@@ -38,11 +37,12 @@ public:
 
     // Setup the coupling: in- and output fields, model and communication settings.
     void setup(std::vector<double*> input_fields_ptr, 
-               std::vector<double*> output_fields_ptr,
-               const std::string& modelPath,
-               int batchSize,
-               const std::vector<int>& nCells,
-               const std::vector<int>& nOffsetCells
+                std::vector<double*> output_fields_ptr,
+                const std::string& modelPath,
+                int batchSize,
+                const std::vector<int>& nCells,
+                const std::vector<int>& nOffsetCells,
+                int nGhostLayers
                );
 
     // Preprocess the input fields into the format expected by the ML model.

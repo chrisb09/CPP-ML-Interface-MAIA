@@ -8,6 +8,7 @@
 #include <mpi.h>
 #include <cstring>
 #include <math.h>
+#include <numeric>
 
 // Include the external C header.
 extern "C" {
@@ -201,6 +202,11 @@ void MLCouplingStrategyPhyDll::receiveFields(std::vector<double>& output_fields_
     phydll_get_field(&ptr, label); // now label is writable
 
     std::cout << "outputfieldflat2 " << output_fields_post.size() << std::endl;
+    std::cout << "outputfields_post front: " << output_fields_post.front() << std::endl;
+    std::cout << "outputfields_post back: " << output_fields_post.back() << std::endl;
+    
+    double sum = std::accumulate(output_fields_post.begin(), output_fields_post.end(), 0.0);
+    std::cout << "Checksum of output_fields_post: " << sum << std::endl;
 }
 
 void MLCouplingStrategyPhyDll::finalize() {

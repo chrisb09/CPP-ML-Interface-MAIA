@@ -87,7 +87,7 @@ def main():
     num_cells_per_process = []
     for pid in range(num_phy_procs):
         cubes_per_process[pid] = [None] * sequence_len
-        field_shape_per_process[pid] = (meta_info_field[pid][0], meta_info_field[pid][1], meta_info_field[pid][2])
+        #field_shape_per_process[pid] = (meta_info_field[pid][0] - (2 * 2 * meta_info_field[pid][3]), meta_info_field[pid][1], meta_info_field[pid][2])
         #num_cells_per_process.append(math.prod(field_shape_per_process[pid]))
         num_cells_per_process.append(meta_info_field[pid][7])
         #print(f"PHYDLL: cells of process = {num_cells_per_process[pid]}")
@@ -160,12 +160,13 @@ def main():
         print(list(fields.keys()))
         print(fields)
         print(count)
-        print(len(flat))
         flat.extend(fields["Python-DL-FIELD-INPUT"])
+        print(len(flat))
         print(count < sequence_len, flush=True)
         if count < sequence_len:
             continue 
         count = 0
+        print(flat[-1])
         #print(flat,flush=True)
         #print(flat,flush=True)
         print(sequence_len ,flush=True)
@@ -201,6 +202,8 @@ def main():
             print(inputs.shape)
             # Run model inference
             #Input is [sequence_len, num_cubes * 3 * cubeD * cubeD * cubeD]
+            print(inputs)
+            print(inputs[0])
             with torch.no_grad():
                 predictions = run_encoder_decoder_inference(
                     device=device,
@@ -210,15 +213,28 @@ def main():
                     batch_size=inputs.shape[1],
                     batch_first=False
                 )
-            print(predictions)
-            print(predictions.shape)
-            print(f"predictions: {predictions.shape}", flush=True)
-            out = predictions[1].view(-1).detach().cpu().numpy()
-            print(f"out: {out.shape}")
-            dl_fields["Python-DL-FIELD-OUTPUT"][curr_pos:curr_pos+vectorLen] = out
-            curr_pos = curr_pos + vectorLen
+                #print(predictions)
+                print(predictions[0])
+                print(predictions[1])
+                print(predictions.shape)
+                print(predictions[0] == inputs[0])
+                print(predictions[0] == inputs[1])
+                print(predictions[0] == inputs[2])
+                print(predictions[0] == inputs[3])
+                print(predictions[0] == inputs[4])
+                print(predictions[1] == inputs[0])
+                print(predictions[1] == inputs[1])
+                print(predictions[1] == inputs[2])
+                print(predictions[1] == inputs[3])
+                print(predictions[1] == inputs[4])
+                print(f"predictions: {predictions.shape}", flush=True)
+                out = predictions[1].view(-1).detach().cpu().numpy()
+                print(f"out: {out.shape}")
+                dl_fields["Python-DL-FIELD-OUTPUT"][curr_pos:curr_pos+vectorLen] = out
+                curr_pos = curr_pos + vectorLen
         print(f"dlfields: {len(dl_fields["Python-DL-FIELD-OUTPUT"])}", flush=True)
-        
+        print(dl_fields["Python-DL-FIELD-OUTPUT"][-1], flush=True)
+        print(f"Checksum: {sum(dl_fields["Python-DL-FIELD-OUTPUT"])}", flush=True)
         dll.send(dl_fields)  
         
         flat = []
