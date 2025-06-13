@@ -14,20 +14,32 @@
 #include "../ml_coupling_strategy/phydll/ml_coupling_strategy_phydll.hpp"
 #endif
 
+// types: T, ProcessedType
 class MLCouplingMaia : public MLCoupling<double, std::vector<double>>
 {
 protected:
-    int irank = 0;
+	std::vector<int> nCells;
+	std::vector<int> nOffsetCells;
+	int nGhostLayers;
     int nFields;
     int fieldSize;
 
-    int cubeC = 2;
-    int cubeD = 8;
+    static constexpr int cubeD = 8;
+    static constexpr int cubeSize = cubeD * cubeD * cubeD;
     int concatX;
     int concatY;
     int concatZ;
+
+    std::vector<int> xs;
+    std::vector<int> ys;
+    std::vector<int> zs;
+
+    std::vector<int> nActiveCells; //nCells without ghostcells
+    int activeFieldSize;
     
-    int iter = 0;
+	int iter = 0;
+	int sequenceLen = 0;
+
 public:
     MLCouplingMaia();
     ~MLCouplingMaia() override;
@@ -37,25 +49,34 @@ public:
 
     // Setup the coupling: in- and output fields, model and communication settings.
     void setup(std::vector<double*> input_fields_ptr, 
-                std::vector<double*> output_fields_ptr,
-                const std::string& modelPath,
-                int batchSize,
-                const std::vector<int>& nCells,
-                const std::vector<int>& nOffsetCells,
-                int nGhostLayers
-               );
+        std::vector<double*> output_fields_ptr,
+        const std::string& modelPath,
+        int batchSize,
+        const std::vector<int>& nCells,
+        const std::vector<int>& nOffsetCells,
+        int nGhostLayers
+    );
+    
+    // The main ML step that processes a time step.
+    void ml_step();
 
     // Preprocess the input fields into the format expected by the ML model.
-    void preprocess_input(std::vector<double*>& input_fields, 
-                          std::vector<std::vector<double>>& input_fields_pre);
+    void preprocess_input(
+        std::vector<double*>& input_fields, 
+        std::vector<std::vector<double>>& input_fields_pre
+    );
 
     // Run the inference using the coupling strategy.
-    void inference(std::vector<std::vector<double>>& input_fields_pre, 
-                   std::vector<double>& output_fields_post);
+    void inference(
+        std::vector<std::vector<double>>& input_fields_pre, 
+        std::vector<double>& output_fields_post
+    );
 
     // Post-process the output fields.
-    void postprocess_output(std::vector<double>& output_fields_post, 
-                            std::vector<double*>& output_fields);
+    void postprocess_output(
+        std::vector<double>& output_fields_post, 
+        std::vector<double*>& output_fields
+    );
 
     // Free allocated resources.
     void finalize();
@@ -63,15 +84,10 @@ public:
     // Returns the MPI communicator from the underlying strategy.
     MPI_Comm getComm();
 
-    // The main ML step that processes a time step.
-    void ml_step();
+    // Helper: extract cubes from a 3D field array.
+    std::vector<std::vector<double>> extract_cubes(const double* data);
 
     // Helper: generate integer points (like numpy.linspace).
-    std::vector<int> linspace_int(int start, int end, int count);
-
-    // Helper: extract cubes from a 3D field array.
-    std::vector<std::vector<double>> extract_cubes(const double* data, int Nx, int Ny, int Nz, int cubeD, int concatX, int concatY, int concatZ);
-
     std::vector<int> linspace(int start, int end, int count);
 };
 

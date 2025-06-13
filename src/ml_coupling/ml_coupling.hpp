@@ -24,31 +24,34 @@ protected:
     int batch_size;
     MPI_Comm app_comm;
 
-	int iter = 0;
-	int sequenceLen = 0;
-
-	std::vector<int> nCells;
-	int nGhostLayers;
-	std::vector<int> nOffsetCells;
 public:
     virtual ~MLCoupling() = default;
 
     virtual void init(int strategy_id) = 0;
 
 	virtual void setup(std::vector<T*> input_fields_ptr, 
-				std::vector<T*> output_fields_ptr,
-				const std::string& modelPath,
-				int batchSize,
-				const std::vector<int>& nCells,
-				const std::vector<int>& nOffsetCells,
-                int nGhostLayers
-				) = 0;
+        std::vector<T*> output_fields_ptr,
+        const std::string& modelPath,
+        int batchSize,
+        const std::vector<int>& nCells,
+        const std::vector<int>& nOffsetCells,
+        int nGhostLayers
+    ) = 0;
 
-    virtual void preprocess_input(std::vector<T*>& input, std::vector<ProcessedType>& input_pre) = 0;
+    virtual void preprocess_input(
+        std::vector<T*>& input, 
+        std::vector<ProcessedType>& input_pre
+    ) = 0;
 
-    virtual void inference(std::vector<ProcessedType>& input_pre, std::vector<T>& output_post) = 0; 
+    virtual void inference(
+        std::vector<ProcessedType>& input_pre, 
+        std::vector<T>& output_post
+    ) = 0; 
 
-    virtual void postprocess_output(std::vector<T>& output_post, std::vector<T*>& output) = 0;
+    virtual void postprocess_output(
+        std::vector<T>& output_post, 
+        std::vector<T*>& output
+    ) = 0;
 
     virtual void finalize() = 0;
 

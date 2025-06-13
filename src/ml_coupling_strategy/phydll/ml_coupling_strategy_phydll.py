@@ -4,7 +4,6 @@ import time
 import sys, random, itertools, os
 import numpy as np
 import matplotlib.pyplot as plt
-import h5py
 import torch
 from src.networks import transformer_tbl, run_encoder_decoder_inference
 import deepspeed
@@ -16,88 +15,41 @@ import thoplw
 
 def main():
     ##################
-    # Create & use input arguments 
-    ##################
-    parser = argparse.ArgumentParser()
-
-    # Add command-line arguments
-    parser.add_argument("--seq-len", help="Input sequence length", type=int, default=5)
-    parser.add_argument("--output-len", help="Output sequence length", type=int, default=2)
-    parser.add_argument("--checkpoint", help="Checkpoint path", type=str, default='/work/thes1961/ai4hpc/checkpoint.pth.tar')
-
-    # Parse the arguments
-    args = parser.parse_args()
-    sequence_len = args.seq_len
-    forecast_window = args.output_len
-    checkpoint_path = args.checkpoint    
-    
-    ##################
     # SETUP COMM 
     ##################
-    print(f"PHYDLL TEST 1 before PhyDLL init", flush=True)
     dll = PhyDLL()
     dll.init(instance="dl")
     comm = dll.get_local_mpi_comm()
     lrank = comm.Get_rank()   
     globalComm = MPI.COMM_WORLD
-    print(f"PHYDLL TEST 2 after PhyDLL init, local rank = {lrank}", flush=True)
-    print(f"PHYDLL TEST 3 after PhyDLL init, globalComm rank = {globalComm.Get_rank()}", flush=True)
-    ##################
-    # Setup Fields
-    ##################
-    field_count = 1 # number of DL fields
 
+    field_count = 1 # number of DL fields
     dll.define_dl(count=field_count)
-    
-    phy_count, dl_count = dll.get_field_counts()
-    #print(f"PHYDLL: number of physical fields = {phy_count}, DL fields = {dl_count}")
 
     dests = dll.get_distribution_info()["dest"]
-    print(f"PHYDLL: destination ranks = {dests}", flush=True)
     num_phy_procs = len(dests)
-    #print(f"PHYDLL ({lrank}): number of physical procs = {num_phy_procs}")
 
-    cubes_tensors = [None] * sequence_len
-    phy_fields = {} # The fields we get 
-    dl_fields = { # The fields we send later
-        "Python-DL-FIELD-0": np.zeros(dll.get_field_size()),
-        "Python-DL-FIELD-1": np.zeros(dll.get_field_size()),
-        "Python-DL-FIELD-2": np.zeros(dll.get_field_size()),
-    }
-    cubes_per_process, field_shape_per_process = {},  [None] * num_phy_procs
-    #print(f"PHYDLL: dll.get_field_size() = {dll.get_field_size()}")
-    meta_info_field = []
-    print(f"{globalComm.Get_size()} processes in total", flush=True)
+
     ##################
     # Get Meta Information
     ##################
-    print("Getting meta information from physical processes", flush=True)
-    #requests = []
+    meta_info_field = []
     for i, dest in enumerate(dests):
-        print(f"PHYDLL: requesting meta info from process {dest}", flush=True)
-        tmp = np.empty(8, dtype=np.int32)
+        tmp = np.empty(3, dtype=np.int32)
         globalComm.Recv(tmp, source=dest, tag=dest)
         meta_info_field.append(tmp)
-        #requests.append(req)
-        print(f"PHYDLL: Appended request", flush=True)
-    #MPI.Request.waitall(requests)
-    print(f"PHYDLL: meta_info_field = {meta_info_field}", flush=True)
+    
+    #General data where no per process differences occur
+    sequence_len = 5
+    forecast_window = 2
+    checkpoint_path = '/work/thes1961/ai4hpc/checkpoint.pth.tar'    
+    cubeD = 8
 
     #Determine process specific data initially  
     num_cells_per_process = []
     for pid in range(num_phy_procs):
-        cubes_per_process[pid] = [None] * sequence_len
-        #field_shape_per_process[pid] = (meta_info_field[pid][0] - (2 * 2 * meta_info_field[pid][3]), meta_info_field[pid][1], meta_info_field[pid][2])
-        #num_cells_per_process.append(math.prod(field_shape_per_process[pid]))
-        num_cells_per_process.append(meta_info_field[pid][7])
-        #print(f"PHYDLL: cells of process = {num_cells_per_process[pid]}")
-
-    ##################
-    # Cube parameters
-    ##################
-    cubeC = 2 # monotonic cuts
-    cubeD = 8 # cube dimension = 8^3
-
+        num_cells_per_process.append(meta_info_field[pid][2])
+        print(meta_info_field[pid][2])
     ##################
     # GPU device
     ##################
@@ -145,65 +97,38 @@ def main():
     model = torch.compile(model)
     model.eval()
 
-    displacements_per_process = [0]
-    for pid in range(1, num_phy_procs):
-        displacements_per_process.append(
-            displacements_per_process[-1] + num_cells_per_process[pid - 1]
-        )
-
-    count = 0
-    flat = []
-    dl_fields = {"Python-DL-FIELD-OUTPUT": np.zeros(sum(num_cells_per_process)),}
+    ##################
+    # Inference
+    ##################
+    curr_seq_idx = 0
+    phy_fields = []
+    dl_fields = {"Python-DL-FIELD-OUTPUT": np.zeros(np.cumsum(num_cells_per_process) // sequence_len),}
     while dll.is_phy_signal():
-        count+=1
+        curr_seq_idx+=1
+        
         fields = dll.recv()
-        print(list(fields.keys()))
-        print(fields)
-        print(count)
-        flat.extend(fields["Python-DL-FIELD-INPUT"])
-        print(len(flat))
-        print(count < sequence_len, flush=True)
-        if count < sequence_len:
+        phy_fields.extend(fields["Python-DL-FIELD-INPUT"])
+
+        #Skip the next stuff if not yet gotten all sequences
+        if curr_seq_idx < sequence_len:
             continue 
-        count = 0
-        print(flat[-1])
-        #print(flat,flush=True)
-        #print(flat,flush=True)
-        print(sequence_len ,flush=True)
-        print(num_cells_per_process,flush=True)
-        print(num_phy_procs,flush=True)
-        # len(flat) == sum(num_cells_per_process)
 
-        offset = 0
-        #for pid in range(num_phy_procs):
-        #assert len(flat) == sequence_len * num_cells_per_process * num_phy_procs
-
-
-        # Step 2: Split data per process
+        #Split data per process
         split_points = np.cumsum(num_cells_per_process)[:-1]
-        per_proc_flat_data = np.split(np.array(flat), split_points)
+        per_proc_flat_data = np.split(phy_fields, split_points)
 
-        # Step 3: Reshape each chunk into [sequenceLen, vectorLen]
-        #input_fields_per_proc = []
-        curr_pos = 0
+        #Reshape each chunk into [sequenceLen, vectorLen]
+        curr_pos = 0 #Increases by num_cells_per_process[pid] // seqlen
         for pid, flat in enumerate(per_proc_flat_data):
             vectorLen = num_cells_per_process[pid] // sequence_len
             reshaped = flat.reshape(sequence_len, vectorLen)
-            #input_fields_per_proc.append(reshaped)
-            print(reshaped.shape)
-            print(reshaped.shape)
 
-            inputs = torch.tensor(reshaped, dtype=torch.float32, device=device)#.reshape(sequence_len, vectorLen)
-            print(inputs.shape)
-            #inputs = torch.stack(cubes_tensors[seq_idx+1:] + cubes_tensors[:seq_idx+1])
+            inputs = torch.tensor(reshaped, dtype=torch.float32, device=device)
             inputs = inputs.reshape(sequence_len, int(vectorLen / (cubeD**3)), cubeD, cubeD, cubeD)
-            print(inputs.shape)
             inputs = inputs.reshape(*inputs.size()[:-3], -1)
-            print(inputs.shape)
+
             # Run model inference
             #Input is [sequence_len, num_cubes * 3 * cubeD * cubeD * cubeD]
-            print(inputs)
-            print(inputs[0])
             with torch.no_grad():
                 predictions = run_encoder_decoder_inference(
                     device=device,
@@ -213,31 +138,15 @@ def main():
                     batch_size=inputs.shape[1],
                     batch_first=False
                 )
-                #print(predictions)
-                print(predictions[0])
-                print(predictions[1])
-                print(predictions.shape)
-                print(predictions[0] == inputs[0])
-                print(predictions[0] == inputs[1])
-                print(predictions[0] == inputs[2])
-                print(predictions[0] == inputs[3])
-                print(predictions[0] == inputs[4])
-                print(predictions[1] == inputs[0])
-                print(predictions[1] == inputs[1])
-                print(predictions[1] == inputs[2])
-                print(predictions[1] == inputs[3])
-                print(predictions[1] == inputs[4])
-                print(f"predictions: {predictions.shape}", flush=True)
                 out = predictions[1].view(-1).detach().cpu().numpy()
-                print(f"out: {out.shape}")
                 dl_fields["Python-DL-FIELD-OUTPUT"][curr_pos:curr_pos+vectorLen] = out
-                curr_pos = curr_pos + vectorLen
-        print(f"dlfields: {len(dl_fields["Python-DL-FIELD-OUTPUT"])}", flush=True)
-        print(dl_fields["Python-DL-FIELD-OUTPUT"][-1], flush=True)
-        print(f"Checksum: {sum(dl_fields["Python-DL-FIELD-OUTPUT"])}", flush=True)
-        dll.send(dl_fields)  
-        
-        flat = []
+                curr_pos = curr_pos + vectorLen    
+
+        dll.send(dl_fields)
+
+        #Reset data
+        phy_fields = []
+        curr_seq_idx = 0
 
     dll.finalize()
 

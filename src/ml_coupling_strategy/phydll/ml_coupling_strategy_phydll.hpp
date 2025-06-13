@@ -20,16 +20,18 @@ public:
 
     // Set up the coupling strategy with meta information and MPI communicator.
     virtual void setup(std::vector<int> nCells, 
-                       std::vector<int> nOffsetCells, 
-                       int nFields, 
-                       int nGhostLayers, 
-                       int fieldSize, 
-                       MPI_Comm comm, 
-                       int sequenceLen) override;
+        std::vector<int> nOffsetCells, 
+        int cubeD,
+        std::vector<int> activeCells,
+        int nFields, 
+        int nGhostLayers, 
+        int fieldSize, 
+        int sequenceLen
+    ) override;
 
     // Executes inference by sending input fields and receiving output fields.
     void inference(std::vector<std::vector<double>>& input_fields,
-                   std::vector<double>& output_fields) override;
+        std::vector<double>& output_fields) override;
 
     // Finalizes the coupling strategy.
     void finalize() override;
@@ -44,21 +46,7 @@ public:
     void receiveFields(std::vector<double>& output_fields_post);
 
 private:
-    std::vector<std::string> phyLabels;
-    std::vector<std::string> dlLabels;
-
     bool is_phydll_initialized = false;
-    
-    int nFields;
-    std::vector<int> nCells;
-    std::vector<int> nOffsetCells;
-    int nGhostLayers;
-    int fieldSize;
-    int sequenceLen;
-
-    int num_cubes;
-    int cube_volume;
-    int total_elements;
 };
 
 #endif // ML_COUPLING_STRATEGY_PHYDLL_HPP

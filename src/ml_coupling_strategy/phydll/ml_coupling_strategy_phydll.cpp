@@ -4,7 +4,6 @@
 #include <stdexcept>
 #include <vector>
 #include <string>
-#include <cstdlib>       // for malloc/free
 #include <mpi.h>
 #include <cstring>
 #include <math.h>
@@ -28,88 +27,73 @@ void MLCouplingStrategyPhyDll::init() {
     }
 }
 
-void MLCouplingStrategyPhyDll::setup(std::vector<int> nCells, std::vector<int> nOffsetCells, int nFields, int nGhostLayers, int fieldSize, MPI_Comm comm, int sequenceLen) {
+void MLCouplingStrategyPhyDll::setup(
+    std::vector<int> nCells, 
+    std::vector<int> nOffsetCells, 
+    int cubeD,
+    std::vector<int> activeCells,
+    int nFields, 
+    int nGhostLayers, 
+    int activeFieldSize, 
+    int sequenceLen
+) {
     this->nCells = nCells;
     this->nOffsetCells = nOffsetCells;
+    this->cubeD = cubeD;
+    this->activeCells = activeCells;
     this->nFields = nFields;
     this->nGhostLayers = nGhostLayers;
+    this->activeFieldSize = activeFieldSize;
     this->sequenceLen = sequenceLen;
-    this->fieldSize = fieldSize;
-
-    // labels for physical fields
-    std::string phyFieldPrefix = "MAIA-PHY-STEP-";
-    std::string phyFieldIDStr;
-    std::string phyFieldLabel;
-    this->phyLabels.resize(this->sequenceLen);
-    for(int i = 0; i < this->sequenceLen; i++) {
-        phyFieldIDStr = std::to_string(i);
-        phyFieldLabel = phyFieldPrefix + phyFieldIDStr;
-        this->phyLabels[i] = phyFieldLabel;
-    }
-    
-    // allocate memory space to store the labels for DL fields
-    this->dlLabels.resize(this->sequenceLen, "");
-    for(int i = 0; i < this->sequenceLen; i++) {
-        // 128 characters for each label should (hopefully) be enough!
-        this->dlLabels[i].resize(128);
-    }
 
     // phydll options
     phydll_opt_enable_cpl_loop();
     phydll_opt_set_freq(1);
     phydll_opt_set_output_freq(1);
 
-
-    int cubeD = 8;
-
-    // Adjusted cell counts excluding ghost layers
-    int Nx = this->nCells[2] - 2 * nGhostLayers;
-    int Ny = this->nCells[1] - 2 * nGhostLayers;
-    int Nz = this->nCells[0] - 2 * nGhostLayers;
-
     // Compute number of cubes based on interior only
-    int concatX = static_cast<int>(std::ceil(static_cast<double>(Nx) / cubeD));
-    int concatY = static_cast<int>(std::ceil(static_cast<double>(Ny) / cubeD));
-    int concatZ = static_cast<int>(std::ceil(static_cast<double>(Nz) / cubeD));
+    int concatX = (activeCells[2] + cubeD - 1) / cubeD;
+    int concatY = (activeCells[1] + cubeD - 1) / cubeD;
+    int concatZ = (activeCells[0] + cubeD - 1) / cubeD;
 
     // === Inline linspace logic for Z ===
     std::vector<int> zs(concatZ);
     if (concatZ == 1) {
         zs[0] = 0;
     } else {
-        double step = static_cast<double>(Nz  - cubeD) / (concatZ - 1);
+        double step = static_cast<double>(activeCells[0]  - cubeD) / (concatZ - 1);
         for (int i = 0; i < concatZ; ++i) {
             zs[i] = static_cast<int>(std::round(i * step));
         }
     }
     zs.insert(zs.begin(), 0); // Add origin cube
-    for (int& z : zs) z += nGhostLayers; // offset to interior position in full domain
+    //for (int& z : zs) z += nGhostLayers; // offset to interior position in full domain
 
     // === Inline linspace logic for Y ===
     std::vector<int> ys(concatY);
     if (concatY == 1) {
         ys[0] = 0;
     } else {
-        double step = static_cast<double>(Ny - cubeD) / (concatY - 1);
+        double step = static_cast<double>(activeCells[1] - cubeD) / (concatY - 1);
         for (int i = 0; i < concatY; ++i) {
             ys[i] = static_cast<int>(std::round(i * step));
         }
     }
     ys.insert(ys.begin(), 0); // Add origin cube
-    for (int& y : ys) y += nGhostLayers;
+    //for (int& y : ys) y += nGhostLayers;
 
     // === Inline linspace logic for X ===
     std::vector<int> xs(concatX);
     if (concatX == 1) {
         xs[0] = 0;
     } else {
-        double step = static_cast<double>(Nx - cubeD) / (concatX - 1);
+        double step = static_cast<double>(activeCells[2] - cubeD) / (concatX - 1);
         for (int i = 0; i < concatX; ++i) {
             xs[i] = static_cast<int>(std::round(i * step));
         }
     }
     xs.insert(xs.begin(), 0); // Add origin cube
-    for (int& x : xs) x += nGhostLayers;
+    //for (int& x : xs) x += nGhostLayers;
 
     // === Count total cubes and calculate total elements ===
     this->num_cubes = zs.size() * ys.size() * xs.size();
@@ -122,15 +106,10 @@ void MLCouplingStrategyPhyDll::setup(std::vector<int> nCells, std::vector<int> n
     phydll_define_phy(1, this->nFields * num_cubes * cube_volume);
 
 
-    int* metaInfoField = (int*) malloc(8 * sizeof(int));
-    metaInfoField[0] =  this->nCells[0]; 
-    metaInfoField[1] =  this->nCells[1];
-    metaInfoField[2] =  this->nCells[2];
-    metaInfoField[3] =  this->nGhostLayers;
-    metaInfoField[4] =  this->nOffsetCells[0];
-    metaInfoField[5] =  this->nOffsetCells[1];
-    metaInfoField[6] =  this->nOffsetCells[2];
-    metaInfoField[7] =  this->total_elements;
+    int* metaInfoInts = (int*) malloc(3 * sizeof(int));
+    metaInfoInts[0] =  this->sequenceLen;
+    metaInfoInts[1] =  this->cubeD;
+    metaInfoInts[2] =  this->total_elements;
 
     int ndest = phydll_get_ndest();
     int* dest = phydll_get_dest();
@@ -138,21 +117,10 @@ void MLCouplingStrategyPhyDll::setup(std::vector<int> nCells, std::vector<int> n
     //Send meta information to python
     int own_rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &own_rank);
-    std::cout << "Own rank: " << own_rank << ", ndest: " << ndest << std::endl;
-    std::cout << "Destinations: ";
-    for(int i = 0; i < ndest; ++i) {
-        std::cout << dest[i] << " ";
-    }
-    std::cout << std::endl;
-    //MPI_Request* requests = (MPI_Request*) malloc(ndest * sizeof(MPI_Request));
     for(int i = 0; i < ndest; ++i){
-        std::cout << "Sending meta information to destination: " << dest[i] << ". Own rank: " << own_rank << std::endl;
-        MPI_Send(metaInfoField, 8, MPI_INT, dest[i], own_rank, MPI_COMM_WORLD);//, &requests[i]);
+        // Send int metadata
+        MPI_Send(metaInfoInts, 3, MPI_INT, dest[i], own_rank, MPI_COMM_WORLD);
     }
-    //MPI_Waitall(ndest, requests, MPI_STATUSES_IGNORE);
-    std::cout << "Before free requests." << std::endl;
-    //free(requests);
-    std::cout << "Sent meta information to Python." << std::endl;
 }
 
 void MLCouplingStrategyPhyDll::inference(
@@ -164,41 +132,22 @@ void MLCouplingStrategyPhyDll::inference(
 }
 
 void MLCouplingStrategyPhyDll::sendFields(std::vector<std::vector<double>>& input_fields_pre) {
-
     // input_fields_pre: [sequenceLen][num_cubes * 3 * cubeD³]
-    int sequenceLen = input_fields_pre.size();
-    int vectorLen = input_fields_pre[0].size();
-
-    std::vector<double> transformer_input(vectorLen);
-    for (int t = 0; t < sequenceLen; ++t) {
-        std::copy(input_fields_pre[t].begin(),
-                input_fields_pre[t].end(),
-                transformer_input.begin());
-                
-        double* ptr = transformer_input.data();  
-        std::cout << "Sending " << transformer_input.size() << " doubles "<< std::endl;
+    for (int t = 0; t < sequenceLen; ++t) {          
+        double* ptr = input_fields_pre[t].data();  
+        std::cout << "Sending " << input_fields_pre[t].size() << " doubles "<< std::endl;
         phydll_set_field(&ptr, (char*)"Python-DL-FIELD-INPUT");
 
         phydll_send();
     }
-
-    // Set one field, reshape is [sequenceLen, vectorLen]
 }
 
 void MLCouplingStrategyPhyDll::receiveFields(std::vector<double>& output_fields_post) {
     phydll_recv();
-    
-    std::cout << "after phydllrecv" << std::endl;
 
     output_fields_post.resize(this->num_cubes * this->nFields * this->cube_volume);
-    std::cout << this->num_cubes * this->nFields * this->cube_volume << std::endl;
-    std::cout << output_fields_post.size() << std::endl;
-    std::cout << "outputfieldflat1 " << output_fields_post.size() << std::endl;
     
-    std::cout << "after resize" << std::endl;
-
     double* ptr = output_fields_post.data();
-    std::cout << "after ptr" << std::endl;
 
     // Create a writable buffer for the label
     constexpr int label_size = 128;  // or LL_CHAR if defined
@@ -209,13 +158,6 @@ void MLCouplingStrategyPhyDll::receiveFields(std::vector<double>& output_fields_
     label[label_size - 1] = '\0'; // null terminate to be safe
 
     phydll_get_field(&ptr, label); // now label is writable
-
-    std::cout << "outputfieldflat2 " << output_fields_post.size() << std::endl;
-    std::cout << "outputfields_post front: " << output_fields_post.front() << std::endl;
-    std::cout << "outputfields_post back: " << output_fields_post.back() << std::endl;
-    
-    double sum = std::accumulate(output_fields_post.begin(), output_fields_post.end(), 0.0);
-    std::cout << "Checksum of output_fields_post: " << sum << std::endl;
 }
 
 void MLCouplingStrategyPhyDll::finalize() {
