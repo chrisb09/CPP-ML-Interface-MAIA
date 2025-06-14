@@ -9,6 +9,7 @@
 #include <string>
 #include <algorithm>
 #include <fstream>
+#include <sstream>
 
 // Constructor and destructor
 MLCouplingMaia::MLCouplingMaia() = default;
@@ -118,6 +119,7 @@ void MLCouplingMaia::ml_step(){
     }else{
         inference(input_fields_pre, output_fields_post);
         postprocess_output(output_fields_post, output_fields);
+        exportCubesToCSV("cubes.csv");
         iter = 0;
         
         //Empty buffer
@@ -128,10 +130,13 @@ void MLCouplingMaia::ml_step(){
 
 void MLCouplingMaia::preprocess_input(
     std::vector<double*>& input_fields, 
-    std::vector<std::vector<double>>& input_fields_pre)
+    std::vector<std::vector<std::vector<double>>>& input_fields_pre)
 {
+    if (input_fields_pre.size() != 5){
+        input_fields_pre.resize(5);
+    }
     std::vector<std::vector<double>> field_cubes(nFields); // [field][num_cubes * cubeD³]
-
+    input_fields_pre[iter].resize(nFields);
     // Extract cubes for u, v, w
     for (int f = 0; f < nFields; ++f) {
         std::vector<double> trimmed_data;
@@ -146,13 +151,68 @@ void MLCouplingMaia::preprocess_input(
             }
         }
         auto cubes = extract_cubes(trimmed_data.data());
+
+        //#ifdef OUTPUT_FIELDS
+        {
+            int target_y = 2;  // Global y-index you care about
+            int target_y_trimmed = target_y - nGhostLayers;
+
+            int trimmed_z = nCells[0] - 2 * nGhostLayers;
+            int trimmed_y = nCells[1] - 2 * nGhostLayers;
+            int trimmed_x = nCells[2] - 2 * nGhostLayers;
+
+            int nCubesX = trimmed_x / cubeD;
+            int nCubesY = trimmed_y / cubeD;
+            int nCubesZ = trimmed_z / cubeD;
+            std::ostringstream filename;
+            filename << "cubes_y_slice_" << iter << "_field_" << f << ".csv";
+            std::ofstream csv(filename.str());
+            csv << "cube_id,field,x,z,value\n";
+
+            int cube_id = 0;
+            for (int zc = 0; zc < nCubesZ; ++zc) {
+                for (int yc = 0; yc < nCubesY; ++yc) {
+                    for (int xc = 0; xc < nCubesX; ++xc) {
+                        const auto& cube = cubes[cube_id];
+
+                        int y_start = yc * cubeD;
+                        int y_end = y_start + cubeD;
+
+                        if (target_y_trimmed >= y_start && target_y_trimmed < y_end) {
+                            int local_y = target_y_trimmed - y_start;
+
+                            for (int z = 0; z < cubeD; ++z) {
+                                for (int x = 0; x < cubeD; ++x) {
+                                    size_t idx = z * cubeD * cubeD + local_y * cubeD + x;
+                                    double val = cube[idx];
+                                    csv << cube_id << "," << f << "," << x << "," << z << "," << val << "\n";
+                                }
+                            }
+                        }
+                    }
+                }
+                ++cube_id;
+            }
+        }
+        //#endif
+
         for (const auto& cube : cubes) {
             field_cubes[f].insert(field_cubes[f].end(), cube.begin(), cube.end());
         }
     }
 
+    // ---------------------------
+    // 1) Save these per-field cube arrays so that later we can compare:
+    m_preFieldCubes = field_cubes; 
+    
+    for (int f = 0; f < nFields; ++f) {
+        input_fields_pre[iter][f].resize(activeFieldSize);
+        input_fields_pre[iter][f] = (std::move(field_cubes[f]));
+    }
+    //input_fields_pre.push_back(std::move(flat));
+
     // Interleave into [num_cubes * nFields * cubeD³]
-    size_t num_cubes = field_cubes[0].size() / (cubeSize);
+    /*size_t num_cubes = field_cubes[0].size() / (cubeSize);
     std::vector<double> flat;
     flat.reserve(num_cubes * nFields * cubeSize);
     for (size_t i = 0; i < num_cubes; ++i) {
@@ -162,12 +222,12 @@ void MLCouplingMaia::preprocess_input(
                         field_cubes[f].begin() + (i + 1) * cubeSize);
         }
     }
-    input_fields_pre.push_back(std::move(flat));
+    input_fields_pre.push_back(std::move(flat));*/
 }
 
 void MLCouplingMaia::inference(
-    std::vector<std::vector<double>>& input_fields_pre, 
-    std::vector<double>& output_fields_post)
+    std::vector<std::vector<std::vector<double>>>& input_fields_pre, 
+    std::vector<std::vector<double>>& output_fields_post)
 {
     if (!coupling_strategy) {
         std::cerr << "ERROR: No coupling strategy set!\n";
@@ -178,11 +238,60 @@ void MLCouplingMaia::inference(
 }
 
 void MLCouplingMaia::postprocess_output(
-    std::vector<double>& output_fields_post,  // Flat, interleaved data (all cubes)
+    std::vector<std::vector<double>>& output_fields_post,  // Flat, interleaved data (all cubes)
     std::vector<double*>& output_fields)        // Output: three reconstructed full volumes
 {
-    #ifdef OUTPUT_FIELDS
-    {
+    //#ifdef OUTPUT_FIELDS
+    /*{
+        int target_y = 2;  // Global y you want
+        int target_y_trimmed = target_y - nGhostLayers;
+
+        int trimmed_z = nCells[0] - 2 * nGhostLayers;
+        int trimmed_y = nCells[1] - 2 * nGhostLayers;
+        int trimmed_x = nCells[2] - 2 * nGhostLayers;
+
+        int nCubesZ = trimmed_z / cubeD;
+        int nCubesY = trimmed_y / cubeD;
+        int nCubesX = trimmed_x / cubeD;
+
+        int cubeSize = cubeD * cubeD * cubeD;
+        int num_cubes = output_fields_post.size() / (nFields * cubeSize);
+
+        std::ostringstream filename;
+        filename << "cubes_received_y_slice_.csv";
+        std::ofstream csv(filename.str());
+        csv << "cube_id,field,x,z,value\n";
+
+        for (int cube_id = 0; cube_id < num_cubes; ++cube_id) {
+            int cube_idx = cube_id;
+
+            int zc = cube_id / (nCubesX * nCubesY);
+            int yc = (cube_id / nCubesX) % nCubesY;
+            int xc = cube_id % nCubesX;
+
+            int y_start = yc * cubeD;
+            int y_end = y_start + cubeD;
+
+            if (target_y_trimmed >= y_start && target_y_trimmed < y_end) {
+                int local_y = target_y_trimmed - y_start;
+
+                for (int f = 0; f < nFields; ++f) {
+                    const double* cube_ptr = &output_fields_post[(cube_id * nFields + f) * cubeSize];
+
+                    for (int z = 0; z < cubeD; ++z) {
+                        for (int x = 0; x < cubeD; ++x) {
+                            size_t idx = z * cubeD * cubeD + local_y * cubeD + x;
+                            double val = cube_ptr[idx];
+                            csv << cube_id << "," << f << "," << x << "," << z << "," << val << "\n";
+                        }
+                    }
+                }
+            }
+        }
+
+        csv.close();
+
+
         std::ofstream csv_end("u_slice_y2_post_start.csv");
         if (!csv_end.is_open()) {
             std::cerr << "Error opening file u_slice_y2_post_start.csv for writing." << std::endl;
@@ -198,8 +307,8 @@ void MLCouplingMaia::postprocess_output(
             }
             csv_end.close();
         }
-    }
-    #endif
+    }*/
+    //#endif
 
     // === Parameters assumed available as member variables ===
     // cubeD: The cube edge length.
@@ -236,7 +345,7 @@ void MLCouplingMaia::postprocess_output(
     }
 
     // Iterate through each cube (as interleaved groups) and extract each field’s cube.
-    for (size_t cubeIndex = 0; cubeIndex < numCubes; ++cubeIndex) {
+    /*for (size_t cubeIndex = 0; cubeIndex < numCubes; ++cubeIndex) {
         for (int f = 0; f < nFields; ++f) {
             size_t startIndex = cubeIndex * groupSize + f * cubeSize;
             field_cubes[f].insert(
@@ -245,8 +354,15 @@ void MLCouplingMaia::postprocess_output(
                 output_fields_post.begin() + startIndex + cubeSize
             );
         }
-    }
+    }*/
+   for (int f = 0; f < nFields; ++f) {
+    field_cubes[f] = output_fields_post[f];
+   }
     
+    // ---------------------------------------------------
+    // Keep them for comparison with the pre-processing step:
+    m_postFieldCubes = field_cubes;
+
     // ------------------------------------------------------------------------
     // Step 2. Reconstruct full volumes (for each field)
     // ------------------------------------------------------------------------
@@ -358,16 +474,16 @@ void MLCouplingMaia::postprocess_output(
         }
     }
 
-    #ifdef OUTPUT_FIELDS
+    //#ifdef OUTPUT_FIELDS
     {
         std::ofstream csv_end("u_slice_y2_post_end.csv");
         if (!csv_end.is_open()) {
             std::cerr << "Error opening file u_slice_y2_post_start.csv for writing." << std::endl;
         } else {
             // Again, for field 0 (adjust if you want to export other fields)
-            for (int y = 0; y < nCells[1]; ++y) {
+             for (int z = 0; z < nCells[0]; ++z) {
                 for (int x = 0; x < nCells[2]; ++x) {
-                    int idx = 10 * nCells[1] * nCells[2] + y * nCells[2] + x;
+                    int idx = z * nCells[1] * nCells[2] + 2 * nCells[2] + x;
                     csv_end << output_fields[0][idx];
                     if (x != nCells[2] - 1)
                         csv_end << ",";
@@ -377,7 +493,7 @@ void MLCouplingMaia::postprocess_output(
             csv_end.close();
         }
     }
-    #endif
+    //#endif
 }
 
 MPI_Comm MLCouplingMaia::getComm(){
@@ -428,4 +544,91 @@ std::vector<std::vector<double>> MLCouplingMaia::extract_cubes(const double* dat
     }
 
     return cubes;
+}
+
+void MLCouplingMaia::exportCubesToCSV(const std::string& filename)
+{
+    // Sanity checks
+    if (m_preFieldCubes.empty() || m_postFieldCubes.empty()) {
+        std::cerr << "[exportCubesToCSV] Error: no stored cubes. "
+                  << "Did you run preprocess/postprocess already?\n";
+        return;
+    }
+    if (m_preFieldCubes.size() != static_cast<size_t>(nFields) ||
+        m_postFieldCubes.size() != static_cast<size_t>(nFields))
+    {
+        std::cerr << "[exportCubesToCSV] Error: mismatch in #fields.\n";
+        return;
+    }
+
+    // Prepare output
+    std::ofstream ofs(filename);
+    if (!ofs.is_open()) {
+        std::cerr << "[exportCubesToCSV] Could not open '" << filename << "' for writing.\n";
+        return;
+    }
+
+    // Write header
+    ofs << "field,cubeIndex,global_x,global_y,global_z,valPre,valPost\n";
+
+    // The number of cubes is deduced from one of the fields (all should match)
+    // e.g. m_preFieldCubes[f].size() == numCubes*cubeSize
+    size_t numCubes = 0;
+    if (!m_preFieldCubes[0].empty()) {
+        numCubes = m_preFieldCubes[0].size() / cubeSize;
+    }
+
+    // We re-use the same iteration order that was used in your extract code:
+    //   size_t cubeIndex = 0;
+    //   for (int z0 : zs) { for (int y0 : ys) { for (int x0 : xs) {
+
+    // Because that is how you matched each "cubeIndex" to (z0,y0,x0).
+    // So we do the same:
+
+    size_t cubeIndex = 0;
+    // Outer loops over the "start" of each cube
+    for (int z0 : zs) {
+        for (int y0 : ys) {
+            for (int x0 : xs) {
+                // For each cube, loop over local voxel coords
+                for (int dz = 0; dz < cubeD; ++dz) {
+                    for (int dy = 0; dy < cubeD; ++dy) {
+                        for (int dx = 0; dx < cubeD; ++dx) {
+                            // Compute global coords in the full volume
+                            int global_z = z0 + dz + nGhostLayers;
+                            int global_y = y0 + dy + nGhostLayers;
+                            int global_x = x0 + dx + nGhostLayers;
+
+                            // local offset inside this cube
+                            int localIndex = dz * (cubeD * cubeD) + dy * cubeD + dx;
+
+                            // For each field, we can store a row
+                            // or you can do a single field at a time; up to you.
+                            for (int f = 0; f < nFields; ++f) {
+                                // Pre
+                                double valPre =
+                                    m_preFieldCubes[f][ cubeIndex * cubeSize + localIndex ];
+
+                                // Post
+                                double valPost =
+                                    m_postFieldCubes[f][ cubeIndex * cubeSize + localIndex ];
+
+                                ofs << f << ","
+                                    << cubeIndex << ","
+                                    << global_x << ","
+                                    << global_y << ","
+                                    << global_z << ","
+                                    << valPre  << ","
+                                    << valPost << "\n";
+                            }
+                        } // dx
+                    } // dy
+                } // dz
+                ++cubeIndex;
+            } // x0
+        } // y0
+    } // z0
+
+    ofs.close();
+    std::cout << "[exportCubesToCSV] Finished writing " << filename << "\n";
 }

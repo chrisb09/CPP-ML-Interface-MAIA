@@ -7,8 +7,8 @@
 #include <mpi.h>
 
 class MLCouplingStrategyPhyDll : public MLCouplingStrategy<
-    std::vector<std::vector<double>>, 
-    std::vector<double>
+    std::vector<std::vector<std::vector<double>>>, 
+    std::vector<std::vector<double>>
 >
 {
 public:
@@ -30,8 +30,8 @@ public:
     ) override;
 
     // Executes inference by sending input fields and receiving output fields.
-    void inference(std::vector<std::vector<double>>& input_fields,
-        std::vector<double>& output_fields) override;
+    void inference(std::vector<std::vector<std::vector<double>>>& input_fields,
+        std::vector<std::vector<double>>& output_fields) override;
 
     // Finalizes the coupling strategy.
     void finalize() override;
@@ -40,10 +40,10 @@ public:
     MPI_Comm getComm() override;
 
     // (Optional) Send input fields via PhyDll.
-    void sendFields(std::vector<std::vector<double>>& input_fields_pre);
+    void sendFields(std::vector<std::vector<std::vector<double>>>& input_fields_pre);
 
     // (Optional) Receive output fields via PhyDll.
-    void receiveFields(std::vector<double>& output_fields_post);
+    void receiveFields(std::vector<std::vector<double>>& output_fields_post);
 
 private:
     bool is_phydll_initialized = false;

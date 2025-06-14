@@ -6,7 +6,7 @@
 #include <iostream>
 #include "../ml_coupling_strategy/ml_coupling_strategy.hpp" 
 #include <mpi.h>
-template <typename T, typename ProcessedType>
+template <typename T, typename ProcessedType, typename OutType>
 
 class MLCoupling {
 protected:
@@ -14,9 +14,9 @@ protected:
     std::vector<T*> output_fields;
 
     std::vector<ProcessedType> input_fields_pre;
-    std::vector<T> output_fields_post;
+    std::vector<OutType> output_fields_post;
 
-    MLCouplingStrategy<std::vector<ProcessedType>, std::vector<T>>* coupling_strategy = nullptr;
+    MLCouplingStrategy<std::vector<ProcessedType>, std::vector<OutType>>* coupling_strategy = nullptr;
     int coupling_strategy_id;
 
     std::string model_path;
@@ -45,11 +45,11 @@ public:
 
     virtual void inference(
         std::vector<ProcessedType>& input_pre, 
-        std::vector<T>& output_post
+        std::vector<OutType>& output_post
     ) = 0; 
 
     virtual void postprocess_output(
-        std::vector<T>& output_post, 
+        std::vector<OutType>& output_post, 
         std::vector<T*>& output
     ) = 0;
 

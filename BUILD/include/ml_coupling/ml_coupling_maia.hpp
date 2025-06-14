@@ -15,7 +15,7 @@
 #endif
 
 // types: T, ProcessedType
-class MLCouplingMaia : public MLCoupling<double, std::vector<double>>
+class MLCouplingMaia : public MLCoupling<double, std::vector<std::vector<double>>, std::vector<double>>
 {
 protected:
 	std::vector<int> nCells;
@@ -39,8 +39,16 @@ protected:
     
 	int iter = 0;
 	int sequenceLen = 0;
+    // Store the un-interleaved cubes from the preprocess step:
+    // (for each field f, we have one long vector of size num_cubes * cubeSize)
+    std::vector<std::vector<double>> m_preFieldCubes;
 
+    // Store the un-interleaved cubes from the postprocess step:
+    std::vector<std::vector<double>> m_postFieldCubes;
 public:
+    void exportCubesToCSV(const std::string& filename);
+
+
     MLCouplingMaia();
     ~MLCouplingMaia() override;
 
@@ -63,18 +71,18 @@ public:
     // Preprocess the input fields into the format expected by the ML model.
     void preprocess_input(
         std::vector<double*>& input_fields, 
-        std::vector<std::vector<double>>& input_fields_pre
+        std::vector<std::vector<std::vector<double>>>& input_fields_pre
     );
 
     // Run the inference using the coupling strategy.
     void inference(
-        std::vector<std::vector<double>>& input_fields_pre, 
-        std::vector<double>& output_fields_post
+        std::vector<std::vector<std::vector<double>>>& input_fields_pre, 
+        std::vector<std::vector<double>>& output_fields_post
     );
 
     // Post-process the output fields.
     void postprocess_output(
-        std::vector<double>& output_fields_post, 
+        std::vector<std::vector<double>>& output_fields_post, 
         std::vector<double*>& output_fields
     );
 

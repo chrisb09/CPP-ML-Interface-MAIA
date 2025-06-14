@@ -199,4 +199,6 @@ src/CMakeFiles/mlCouplingLib.dir/ml_coupling/ml_coupling_maia.cpp.o: \
  /cvmfs/software.hpc.rwth.de/Linux/RH9/x86_64/intel/sapphirerapids/software/GCCcore/13.3.0/include/c++/13.3.0/bits/codecvt.h \
  /cvmfs/software.hpc.rwth.de/Linux/RH9/x86_64/intel/sapphirerapids/software/GCCcore/13.3.0/include/c++/13.3.0/x86_64-pc-linux-gnu/bits/basic_file.h \
  /cvmfs/software.hpc.rwth.de/Linux/RH9/x86_64/intel/sapphirerapids/software/GCCcore/13.3.0/include/c++/13.3.0/x86_64-pc-linux-gnu/bits/c++io.h \
- /cvmfs/software.hpc.rwth.de/Linux/RH9/x86_64/intel/sapphirerapids/software/GCCcore/13.3.0/include/c++/13.3.0/bits/fstream.tcc
+ /cvmfs/software.hpc.rwth.de/Linux/RH9/x86_64/intel/sapphirerapids/software/GCCcore/13.3.0/include/c++/13.3.0/bits/fstream.tcc \
+ /cvmfs/software.hpc.rwth.de/Linux/RH9/x86_64/intel/sapphirerapids/software/GCCcore/13.3.0/include/c++/13.3.0/sstream \
+ /cvmfs/software.hpc.rwth.de/Linux/RH9/x86_64/intel/sapphirerapids/software/GCCcore/13.3.0/include/c++/13.3.0/bits/sstream.tcc

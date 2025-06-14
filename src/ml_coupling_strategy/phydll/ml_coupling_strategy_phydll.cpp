@@ -103,7 +103,7 @@ void MLCouplingStrategyPhyDll::setup(
 
 
     // define physical solver instance
-    phydll_define_phy(1, this->nFields * num_cubes * cube_volume);
+    phydll_define_phy(3, /*this->nFields **/ num_cubes * cube_volume);
 
 
     int* metaInfoInts = (int*) malloc(3 * sizeof(int));
@@ -124,40 +124,47 @@ void MLCouplingStrategyPhyDll::setup(
 }
 
 void MLCouplingStrategyPhyDll::inference(
-    std::vector<std::vector<double>>& input_fields,
-    std::vector<double>& output_fields) 
+    std::vector<std::vector<std::vector<double>>>& input_fields,
+    std::vector<std::vector<double>>& output_fields) 
 {
     sendFields(input_fields);
     receiveFields(output_fields);
 }
 
-void MLCouplingStrategyPhyDll::sendFields(std::vector<std::vector<double>>& input_fields_pre) {
+void MLCouplingStrategyPhyDll::sendFields(std::vector<std::vector<std::vector<double>>>& input_fields_pre) {
     // input_fields_pre: [sequenceLen][num_cubes * 3 * cubeD³]
-    for (int t = 0; t < sequenceLen; ++t) {          
-        double* ptr = input_fields_pre[t].data();  
-        std::cout << "Sending " << input_fields_pre[t].size() << " doubles "<< std::endl;
-        phydll_set_field(&ptr, (char*)"Python-DL-FIELD-INPUT");
-
+    for (int t = 0; t < sequenceLen; ++t) { 
+        for(int f = 0; f < nFields; f++){         
+            double* ptr = input_fields_pre[t][f].data();  
+            std::cout << "Sending " << input_fields_pre[t].size() << " doubles "<< std::endl;
+            phydll_set_field(&ptr, (char*)"Python-DL-FIELD-INPUT-0");
+            phydll_set_field(&ptr, (char*)"Python-DL-FIELD-INPUT-1");
+            phydll_set_field(&ptr, (char*)"Python-DL-FIELD-INPUT-2");
+        }   
         phydll_send();
     }
 }
 
-void MLCouplingStrategyPhyDll::receiveFields(std::vector<double>& output_fields_post) {
+void MLCouplingStrategyPhyDll::receiveFields(std::vector<std::vector<double>>& output_fields_post) {
     phydll_recv();
 
-    output_fields_post.resize(this->num_cubes * this->nFields * this->cube_volume);
-    
-    double* ptr = output_fields_post.data();
+    output_fields_post.resize(3);
+    for(int f = 0; f < nFields; f++){         
+        output_fields_post[f].resize(this->num_cubes * /*this->nFields **/ this->cube_volume);
+        
+        double* ptr = output_fields_post[f].data();
 
-    // Create a writable buffer for the label
-    constexpr int label_size = 128;  // or LL_CHAR if defined
-    char label[label_size] = {0};
+        // Create a writable buffer for the label
+        constexpr int label_size = 128;  // or LL_CHAR if defined
+        char label[label_size] = {0};
 
-    // Initialize the label with the literal string
-    strncpy(label, "Python-DL-FIELD-OUTPUT", label_size - 1);
-    label[label_size - 1] = '\0'; // null terminate to be safe
+        // Initialize the label with the literal string
+        std::string fieldlabel = "Python-DL-FIELD-OUTPUT" + std::to_string(f);
+        strncpy(label, fieldlabel.c_str(), label_size - 1);
+        label[label_size - 1] = '\0'; // null terminate to be safe
 
-    phydll_get_field(&ptr, label); // now label is writable
+        phydll_get_field(&ptr, label); // now label is writable
+    }
 }
 
 void MLCouplingStrategyPhyDll::finalize() {
