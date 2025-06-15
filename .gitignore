@@ -1,2 +1,4 @@
 extern/python/venv
 extern/libtorch
+BUILD
+src/model/transformer_inference_scripted.pt

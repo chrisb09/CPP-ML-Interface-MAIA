@@ -56,7 +56,8 @@ public:
     void init(int strategy_id);
 
     // Setup the coupling: in- and output fields, model and communication settings.
-    void setup(std::vector<double*> input_fields_ptr, 
+    void setup(
+        std::vector<double*> input_fields_ptr, 
         std::vector<double*> output_fields_ptr,
         const std::string& modelPath,
         int batchSize,
@@ -70,6 +71,16 @@ public:
 
     // Preprocess the input fields into the format expected by the ML model.
     void preprocess_input(
+        std::vector<double*>& input_fields, 
+        std::vector<std::vector<std::vector<double>>>& input_fields_pre
+    );    
+    
+    void preprocess_input_phydll(
+        std::vector<double*>& input_fields, 
+        std::vector<std::vector<std::vector<double>>>& input_fields_pre
+    );
+    
+    void preprocess_input_aix(
         std::vector<double*>& input_fields, 
         std::vector<std::vector<std::vector<double>>>& input_fields_pre
     );

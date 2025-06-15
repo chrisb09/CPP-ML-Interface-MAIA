@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <fstream>
 #include <sstream>
+#include <cassert>
 
 // Constructor and destructor
 MLCouplingMaia::MLCouplingMaia() = default;
@@ -26,20 +27,22 @@ void MLCouplingMaia::init(int strategy_id) {
         coupling_strategy = new MLCouplingStrategyAix();
         std::cout << "Created Aix Coupling\n";
     } 
+    coupling_strategy->init(input_fields_pre, output_fields_post);
+    this->app_comm = MPI_COMM_WORLD;
     #endif
+
     #ifdef WITH_PHYDLL
     if (coupling_strategy_id == 2) {
         coupling_strategy = new MLCouplingStrategyPhyDll();
         std::cout << "Created PhyDLL Coupling\n";
     }
+    coupling_strategy->init();
+    this->app_comm = coupling_strategy->getComm();
     #endif
+
     if (!coupling_strategy) {
         std::cerr << "ERROR: Unknown coupling_strategy_id = " << coupling_strategy_id << "!\n";
     }
-
-    coupling_strategy->init();
-    
-    this->app_comm = coupling_strategy->getComm();
 }
 
 void MLCouplingMaia::setup(
@@ -132,6 +135,18 @@ void MLCouplingMaia::preprocess_input(
     std::vector<double*>& input_fields, 
     std::vector<std::vector<std::vector<double>>>& input_fields_pre)
 {
+    if (coupling_strategy_id == 1){
+        preprocess_input_aix(input_fields, input_fields_pre);
+    }
+    if (coupling_strategy_id == 2){
+        preprocess_input_phydll(input_fields, input_fields_pre);
+    }
+}
+
+void MLCouplingMaia::preprocess_input_phydll(
+    std::vector<double*>& input_fields, 
+    std::vector<std::vector<std::vector<double>>>& input_fields_pre
+){ 
     if (input_fields_pre.size() != 5){
         input_fields_pre.resize(5);
     }
@@ -223,6 +238,57 @@ void MLCouplingMaia::preprocess_input(
         }
     }
     input_fields_pre.push_back(std::move(flat));*/
+}
+
+void MLCouplingMaia::preprocess_input_aix(
+    std::vector<double*>& input_fields, 
+    // Now interpreted as: outer vector = batch elements,
+    // inner vector = time steps, innermost vector = cube data of one cube.
+    std::vector<std::vector<std::vector<double>>>& input_fields_pre)
+{
+    int nCubes = zs.size() * ys.size() * xs.size();
+    // Desired batch dimension = nFields * nCubes.
+    int requiredBatch = nFields * nCubes;
+    
+    // Instead of having the outer vector sized by the sequence (time), we now want it sized by batch.
+    if (input_fields_pre.size() != static_cast<size_t>(requiredBatch)) {
+        input_fields_pre.clear();
+        input_fields_pre.resize(requiredBatch);
+        // Note: The inner vectors (the time series for each batch element) will be built incrementally.
+    }
+    
+    // Process each field separately.
+    for (int f = 0; f < nFields; ++f) {
+        std::vector<double> trimmed_data;
+        trimmed_data.reserve(activeFieldSize);
+        // Same as before: extract the “trimmed” data for field f.
+        for (int z = nGhostLayers; z < nCells[0] - nGhostLayers; ++z) {
+            for (int y = nGhostLayers; y < nCells[1] - nGhostLayers; ++y) {
+                for (int x = nGhostLayers; x < nCells[2] - nGhostLayers; ++x) {
+                    size_t idx = (z * nCells[1] * nCells[2]) + (y * nCells[2]) + x;
+                    trimmed_data.push_back(input_fields[f][idx]);
+                }
+            }
+        }
+        
+        // Extract cubes from the trimmed data.
+        // Here, extract_cubes returns a vector of cubes for the given field.
+        // Each cube is a vector<double> of length cubeD*cubeD*cubeD.
+        std::vector<std::vector<double>> cubes = extract_cubes(trimmed_data.data());
+        
+        // Optional: Check that the number of cubes is as expected.
+        assert(cubes.size() == static_cast<size_t>(nCubes));
+        
+        // Now, instead of storing the cubes under the time step index,
+        // we place each cube into its proper "batch" slot.
+        // The batch index for field f and cube cube_idx is: f * nCubes + cube_idx.
+        for (size_t cube_idx = 0; cube_idx < cubes.size(); ++cube_idx) {
+            int batch_index = f * nCubes + static_cast<int>(cube_idx);
+            // Instead of overwriting an entire vector (as before) we push_back a new time step.
+            // Each call to preprocess_input adds one new time step for each batch element.
+            input_fields_pre[batch_index].push_back(std::move(cubes[cube_idx]));
+        }
+    }
 }
 
 void MLCouplingMaia::inference(

@@ -233,7 +233,7 @@ def main():
             print(fields_data.shape)
             # Convert to tensor
             inputs = torch.tensor(fields_data, dtype=torch.float32, device=device)
-            inputs = inputs.reshape(*inputs.size()[:-3], -1)
+            inputs = inputs.reshape(*inputs.size()[:-3], -1) #seqlen, fields*numcubes, cubeD^3
             with torch.no_grad():
                 predictions = run_encoder_decoder_inference(
                     device=device,

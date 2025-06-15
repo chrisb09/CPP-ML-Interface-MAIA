@@ -29,7 +29,8 @@ public:
 
     virtual void init(int strategy_id) = 0;
 
-	virtual void setup(std::vector<T*> input_fields_ptr, 
+	virtual void setup(
+        std::vector<T*> input_fields_ptr, 
         std::vector<T*> output_fields_ptr,
         const std::string& modelPath,
         int batchSize,

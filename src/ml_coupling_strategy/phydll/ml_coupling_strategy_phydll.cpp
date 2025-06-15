@@ -37,70 +37,12 @@ void MLCouplingStrategyPhyDll::setup(
     int activeFieldSize, 
     int sequenceLen
 ) {
-    this->nCells = nCells;
-    this->nOffsetCells = nOffsetCells;
-    this->cubeD = cubeD;
-    this->activeCells = activeCells;
-    this->nFields = nFields;
-    this->nGhostLayers = nGhostLayers;
-    this->activeFieldSize = activeFieldSize;
-    this->sequenceLen = sequenceLen;
+    baseSetup(nCells, nOffsetCells, cubeD, activeCells, nFields, nGhostLayers, activeFieldSize, sequenceLen);
 
     // phydll options
     phydll_opt_enable_cpl_loop();
     phydll_opt_set_freq(1);
     phydll_opt_set_output_freq(1);
-
-    // Compute number of cubes based on interior only
-    int concatX = (activeCells[2] + cubeD - 1) / cubeD;
-    int concatY = (activeCells[1] + cubeD - 1) / cubeD;
-    int concatZ = (activeCells[0] + cubeD - 1) / cubeD;
-
-    // === Inline linspace logic for Z ===
-    std::vector<int> zs(concatZ);
-    if (concatZ == 1) {
-        zs[0] = 0;
-    } else {
-        double step = static_cast<double>(activeCells[0]  - cubeD) / (concatZ - 1);
-        for (int i = 0; i < concatZ; ++i) {
-            zs[i] = static_cast<int>(std::round(i * step));
-        }
-    }
-    zs.insert(zs.begin(), 0); // Add origin cube
-    //for (int& z : zs) z += nGhostLayers; // offset to interior position in full domain
-
-    // === Inline linspace logic for Y ===
-    std::vector<int> ys(concatY);
-    if (concatY == 1) {
-        ys[0] = 0;
-    } else {
-        double step = static_cast<double>(activeCells[1] - cubeD) / (concatY - 1);
-        for (int i = 0; i < concatY; ++i) {
-            ys[i] = static_cast<int>(std::round(i * step));
-        }
-    }
-    ys.insert(ys.begin(), 0); // Add origin cube
-    //for (int& y : ys) y += nGhostLayers;
-
-    // === Inline linspace logic for X ===
-    std::vector<int> xs(concatX);
-    if (concatX == 1) {
-        xs[0] = 0;
-    } else {
-        double step = static_cast<double>(activeCells[2] - cubeD) / (concatX - 1);
-        for (int i = 0; i < concatX; ++i) {
-            xs[i] = static_cast<int>(std::round(i * step));
-        }
-    }
-    xs.insert(xs.begin(), 0); // Add origin cube
-    //for (int& x : xs) x += nGhostLayers;
-
-    // === Count total cubes and calculate total elements ===
-    this->num_cubes = zs.size() * ys.size() * xs.size();
-    this->cube_volume = cubeD * cubeD * cubeD;
-    this->total_elements = this->sequenceLen * this->nFields * num_cubes * cube_volume;
-
-
 
     // define physical solver instance
     phydll_define_phy(3, /*this->nFields **/ num_cubes * cube_volume);
@@ -132,7 +74,7 @@ void MLCouplingStrategyPhyDll::inference(
 }
 
 void MLCouplingStrategyPhyDll::sendFields(std::vector<std::vector<std::vector<double>>>& input_fields_pre) {
-    // input_fields_pre: [sequenceLen][num_cubes * 3 * cubeD³]
+    // input_fields_pre: [sequenceLen][field][num_cubes * cubeD³]
     for (int t = 0; t < sequenceLen; ++t) { 
         for(int f = 0; f < nFields; f++){         
             double* ptr = input_fields_pre[t][f].data();  

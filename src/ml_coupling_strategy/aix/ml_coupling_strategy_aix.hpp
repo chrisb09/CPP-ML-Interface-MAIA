@@ -7,63 +7,48 @@
 #include <mpi.h>
 
 class MLCouplingStrategyAix : public MLCouplingStrategy<
-    std::vector<std::vector<double>>, 
-    std::vector<double>
+    std::vector<std::vector<std::vector<double>>>, 
+    std::vector<std::vector<double>>
 >
 {
 public:
     MLCouplingStrategyAix();
     virtual ~MLCouplingStrategyAix();
 
-    // Initializes the external Aix library.
-    void init() override;
+    void init(
+        std::vector<std::vector<std::vector<double>>>& input_fields,
+        std::vector<std::vector<std::vector<double>>>& output_fields
+    ) /*override*/;
 
-    // Set up the coupling strategy with meta information and MPI communicator.
-    virtual void setup(std::vector<int> nCells, 
-                       std::vector<int> nOffsetCells, 
-                       int nFields, 
-                       int nGhostLayers, 
-                       int fieldSize, 
-                       MPI_Comm comm, 
-                       int sequenceLen) override;
+    virtual void setup(
+        std::vector<int> nCells, 
+        std::vector<int> nOffsetCells, 
+        int cubeD,
+        std::vector<int> activeCells,
+        int nFields, 
+        int nGhostLayers, 
+        int activeFieldSize, 
+        int sequenceLen
+    ) override;
 
-    // Executes inference by sending input fields and receiving output fields.
-    void inference(std::vector<std::vector<double>>& input_fields,
-                   std::vector<double>& output_fields) override;
+    void inference();
 
-    // Finalizes the coupling strategy.
     void finalize() override;
-
-    // Returns the local MPI communicator.
-    MPI_Comm getComm() override;
-
-    // (Optional) Send input fields via Aix.
-    void sendFields(std::vector<std::vector<double>>& input_fields_pre);
-
-    // (Optional) Receive output fields via Aix.
-    void receiveFields(std::vector<double>& output_fields_post);
-
 private:
-    void* aixelerator_ = nullptr;
-
-    std::vector<float> inputData_;
-    std::vector<float> outputData_;
-    
-    std::vector<std::string> phyLabels;
-    std::vector<std::string> dlLabels;
+    AIxeleratorService<std::vector<std::vector<std::vector<double>>>> aixelerator;
 
     bool is_Aix_initialized = false;
-    
-    int nFields;
-    std::vector<int> nCells;
-    std::vector<int> nOffsetCells;
-    int nGhostLayers;
-    int fieldSize;
-    int sequenceLen;
 
-    int num_cubes;
-    int cube_volume;
-    int total_elements;
+    std::vector<int64_t> input_shape;
+    std::vector<int64_t> output_shape;
+    std::vector<std::vector<std::vector<double>>>* input_fields_ptr;
+    std::vector<std::vector<std::vector<double>>>* output_fields_ptr;
+    int batchsize;
+    MPI_COMM comm;
+
+
+    void preprocess();
+    void postprocess();
 };
 
 #endif // ML_COUPLING_STRATEGY_AIX_HPP
