@@ -1,4 +1,4 @@
-#include "maia_helpers.hpp"
+#include "ml_coupling/maia/helpers/maia_helpers.hpp"
 
 #include <iostream>
 #include <numeric>

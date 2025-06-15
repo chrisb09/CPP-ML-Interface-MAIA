@@ -1,60 +1,9 @@
-#pragma once
-
-#include <string>
-#include <vector>
-#include <iostream>
-#include <stdexcept>
-#include "mpi.h"
-template <typename In, typename Out>
-
-class MLCouplingStrategy {
-public:
-    virtual ~MLCouplingStrategy() = default;
-
-    virtual void init() = 0;
-
-    /*virtual void setup(
-        const std::string& model,
-        const std::vector<int>& input_shape,
-        const std::vector<int>& output_shape,
-        int batch_size,
-        MPI_Comm comm
-    ) = 0;*/
-
-    virtual void setup(
-        std::vector<int> nCells, 
-        std::vector<int> nOffsetCells, 
-        int cubeD,
-        std::vector<int> activeCells,
-        int nFields, 
-        int nGhostLayers, 
-        int fieldSize, 
-        int sequenceLen
-    ) = 0;
-
-    virtual void inference(In& input_fields, Out& output_fields) = 0;
-
-    virtual void finalize() = 0;
-
-    virtual MPI_Comm getComm() = 0;
-
-protected:
-    std::string model_path;
-    int nFields;
-    std::vector<int> nCells;
-    std::vector<int> nOffsetCells;
-    int nGhostLayers;
-    int activeFieldSize;
-    int sequenceLen;
-
-    int num_cubes;
-    int cube_volume;
-    int total_elements;
-    std::vector<int> activeCells;
-    int cubeD;
+//#include "ml_coupling/maia/ml_coupling_maia.hpp"
+//#include "ml_coupling/maia/helpers/maia_helpers.hpp"
 
 
-    void baseSetup(
+
+   /* void baseSetup(
         const std::vector<int>& nCells,
         const std::vector<int>& nOffsetCells,
         int cubeD,
@@ -122,5 +71,22 @@ protected:
         this->num_cubes = zs.size() * ys.size() * xs.size();
         this->cube_volume = cubeD * cubeD * cubeD;
         this->total_elements = this->sequenceLen * this->nFields * num_cubes * cube_volume;
-    }
-};
+    }*/
+
+/*    
+
+    //Save where the inputs and also outputs are in maia
+
+
+    coupling_strategy->setup(
+        this->nCells, 
+        this->nOffsetCells, 
+        cubeD,
+        nActiveCells,
+        nFields, 
+        this->nGhostLayers, 
+        activeFieldSize,
+        sequenceLen
+    );
+}*/
+    

@@ -1,166 +1,125 @@
-#include "ml_coupling_maia.hpp"
-#include "maia/maia_helpers.hpp"
+#ifndef ML_COUPLING_MAIA_PHYDLL_HPP
+#define ML_COUPLING_MAIA_PHYDLL_HPP
 
-#include <iostream>
-#include <numeric>
-#include <cmath>
-#include <stdexcept>
+#include "ml_coupling/maia/ml_coupling_maia.hpp"  // Defines the templated base class MLCoupling
+#include "ml_coupling_strategy/phydll/ml_coupling_strategy_phydll.hpp"
+#include <mpi.h>  // For MPI_Comm
+
+// Include strategy headers instead of .cpp files.
+#ifdef WITH_PHYDLL
+#include "ml_coupling_strategy/phydll/ml_coupling_strategy_phydll.hpp"
+#endif
+
 #include <vector>
 #include <string>
-#include <algorithm>
+#include <mpi.h>
+#include <iostream>
+#include <stdexcept>
+#include <cstring>
+#include <math.h>
+#include <numeric>
 #include <fstream>
 #include <sstream>
-#include <cassert>
 
-// Constructor and destructor
-MLCouplingMaia::MLCouplingMaia() = default;
 
-MLCouplingMaia::~MLCouplingMaia() {
+
+class MLCouplingMaiaPhyDLL : public MLCouplingMaia<std::vector<std::vector<std::vector<double>>>, std::vector<std::vector<double>>>{
+public:
+    MLCouplingMaiaPhyDLL();
+    virtual ~MLCouplingMaiaPhyDLL();
+
+    void init() override;
+
+    void setup(
+        std::vector<double*> input_fields_ptr, 
+        std::vector<double*> output_fields_ptr,
+        const std::string& param_model_path,
+        const std::vector<int>& param_nCells,
+        const std::vector<int>& param_nOffsetCells,
+        int param_nGhostLayers
+    ) override;
+
+    MPI_Comm getComm() override;
+
+    void finalize() override;
+
+protected:
+    //Strategy Object
+    MLCouplingStrategyPhyDLL<std::vector<std::vector<std::vector<double>>>, std::vector<std::vector<double>>>* couplingStrategy;
+
+    //Internal ML pipeline steps
+    void preprocess_input();
+    void inference();
+    void postprocess_output();
+};
+
+
+////////////////////////////////////////////////////////////////////////
+// Inline implementations
+////////////////////////////////////////////////////////////////////////
+
+inline MLCouplingMaiaPhyDLL::MLCouplingMaiaPhyDLL() = default;
+
+inline MLCouplingMaiaPhyDLL::~MLCouplingMaiaPhyDLL() {
     finalize();
 }
 
-// Initializes the coupling strategy.
-void MLCouplingMaia::init(int strategy_id) {
-    coupling_strategy_id = strategy_id;
-    #ifdef WITH_AIX
-    if (coupling_strategy_id == 1) {
-        coupling_strategy = new MLCouplingStrategyAix();
-        std::cout << "Created Aix Coupling\n";
-    } 
-    coupling_strategy->init(input_fields_pre, output_fields_post);
-    this->app_comm = MPI_COMM_WORLD;
-    #endif
+inline void MLCouplingMaiaPhyDLL::init() {
+    couplingStrategy = new MLCouplingStrategyPhyDLL<std::vector<std::vector<std::vector<double>>>, std::vector<std::vector<double>>>();
+    couplingStrategy->init();
+}
 
-    #ifdef WITH_PHYDLL
-    if (coupling_strategy_id == 2) {
-        coupling_strategy = new MLCouplingStrategyPhyDll();
-        std::cout << "Created PhyDLL Coupling\n";
-    }
-    coupling_strategy->init();
-    this->app_comm = coupling_strategy->getComm();
-    #endif
 
-    if (!coupling_strategy) {
-        std::cerr << "ERROR: Unknown coupling_strategy_id = " << coupling_strategy_id << "!\n";
+inline void MLCouplingMaiaPhyDLL::setup(
+    std::vector<double*> input_fields_ptr, 
+    std::vector<double*> output_fields_ptr,
+    const std::string& param_model_path,
+    const std::vector<int>& param_nCells,
+    const std::vector<int>& param_nOffsetCells,
+    int param_nGhostLayers
+){
+    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers);
+    couplingStrategy->setup(true, 1, 1, nFields, numCubes * cubeSize);
+
+    int* metaInfo = (int*) malloc(3 * sizeof(int));
+    metaInfo[0] =  this->sequenceLen;
+    metaInfo[1] =  this->cubeD;
+    metaInfo[2] =  this->totalElements;
+
+    int ndest = couplingStrategy->getNDest();
+    int* dest = couplingStrategy->getDest();
+
+    //Send meta information to python
+    int own_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &own_rank);
+    for(int i = 0; i < ndest; ++i){
+        // Send int metadata
+        #pragma GCC diagnostic push
+        #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+        MPI_Send(metaInfo, 3, MPI_INT, dest[i], own_rank, MPI_COMM_WORLD);
+        #pragma GCC diagnostic pop
     }
 }
 
-void MLCouplingMaia::setup(
-        std::vector<double*> input_fields_ptr, 
-        std::vector<double*> output_fields_ptr,
-        const std::string& modelPath,
-        int batchSize,
-        const std::vector<int>& nCells,
-        const std::vector<int>& nOffsetCells,
-        int nGhostLayers
-        ) 
-{
-    nFields = input_fields_ptr.size();
-    fieldSize = std::accumulate(nCells.begin(), nCells.end(), 1,  std::multiplies());
-    sequenceLen = 5;
-
-    model_path = modelPath;
-    batch_size = batchSize;
-
-    this->nCells.resize(3);
-    this->nCells[0] = nCells[0]; 
-    this->nCells[1] = nCells[1];
-    this->nCells[2] = nCells[2];
-    
-    this->nOffsetCells.resize(3);
-    this->nOffsetCells[0] =  nOffsetCells[0];
-    this->nOffsetCells[1] =  nOffsetCells[1];
-    this->nOffsetCells[2] =  nOffsetCells[2];   
-
-    this->nGhostLayers = nGhostLayers;
-
-    //Without the ghostcells
-    nActiveCells.resize(3);
-    nActiveCells[0] = this->nCells[0] - 2 * this->nGhostLayers;
-    nActiveCells[1] = this->nCells[1] - 2 * this->nGhostLayers;
-    nActiveCells[2] = this->nCells[2] - 2 * this->nGhostLayers;
-
-    activeFieldSize = std::accumulate(nActiveCells.begin(), nActiveCells.end(), 1,  std::multiplies());
-    
-    concatX = (nActiveCells[2] + cubeD - 1) / cubeD;
-    concatY = (nActiveCells[1] + cubeD - 1) / cubeD;
-    concatZ = (nActiveCells[0] + cubeD - 1) / cubeD;
-
-    
-    xs = linspace(0, nActiveCells[2] - cubeD, concatX);
-    ys = linspace(0, nActiveCells[1] - cubeD, concatY);
-    zs = linspace(0, nActiveCells[0] - cubeD, concatZ);
-    xs.insert(xs.begin(), 0);
-    ys.insert(ys.begin(), 0);
-    zs.insert(zs.begin(), 0);  
-    
-    //Save where the inputs and also outputs are in maia
-    input_fields.clear();
-    output_fields.clear();
-    for(size_t i = 0; i < nFields; i++){
-        input_fields.push_back(input_fields_ptr[i]);          
-        output_fields.push_back(output_fields_ptr[i]); 
-    }
-
-    coupling_strategy->setup(
-        this->nCells, 
-        this->nOffsetCells, 
-        cubeD,
-        nActiveCells,
-        nFields, 
-        this->nGhostLayers, 
-        activeFieldSize,
-        sequenceLen
-    );
+inline MPI_Comm MLCouplingMaiaPhyDLL::getComm() {
+    return couplingStrategy->getComm();
 }
-
-void MLCouplingMaia::ml_step(){
-    //With this we ensure that we gather seqLen (4) timesteps and only then infer
-    preprocess_input(input_fields, input_fields_pre);   
-    if (iter < sequenceLen-1) {
-        iter++;
-    }else{
-        inference(input_fields_pre, output_fields_post);
-        postprocess_output(output_fields_post, output_fields);
-        exportCubesToCSV("cubes.csv");
-        iter = 0;
-        
-        //Empty buffer
-        input_fields_pre.clear();
-        output_fields_post.clear();
-    }
-}
-
-void MLCouplingMaia::preprocess_input(
-    std::vector<double*>& input_fields, 
-    std::vector<std::vector<std::vector<double>>>& input_fields_pre)
-{
-    if (coupling_strategy_id == 1){
-        preprocess_input_aix(input_fields, input_fields_pre);
-    }
-    if (coupling_strategy_id == 2){
-        preprocess_input_phydll(input_fields, input_fields_pre);
-    }
-}
-
-void MLCouplingMaia::preprocess_input_phydll(
-    std::vector<double*>& input_fields, 
-    std::vector<std::vector<std::vector<double>>>& input_fields_pre
-){ 
+    
+inline void MLCouplingMaiaPhyDLL::preprocess_input(){ 
     if (input_fields_pre.size() != 5){
         input_fields_pre.resize(5);
     }
-    std::vector<std::vector<double>> field_cubes(nFields); // [field][num_cubes * cubeD³]
+    std::vector<std::vector<double>> field_cubes(nFields); // [field][numCubes * cubeD³]
     input_fields_pre[iter].resize(nFields);
     // Extract cubes for u, v, w
     for (int f = 0; f < nFields; ++f) {
         std::vector<double> trimmed_data;
-        trimmed_data.reserve(activeFieldSize);
+        trimmed_data.reserve(activeFieldCells);
         // Flattened index access: input_fields[f] is of size nCells[0]*nCells[1]*nCells[2]
         for (int z = nGhostLayers; z < nCells[0] - nGhostLayers; ++z) {
             for (int y = nGhostLayers; y < nCells[1] - nGhostLayers; ++y) {
                 for (int x = nGhostLayers; x < nCells[2] - nGhostLayers; ++x) {
-                    size_t idx = (z * nCells[1] * nCells[2]) + (y * nCells[2]) + x;
+                    int idx = (z * nCells[1] * nCells[2]) + (y * nCells[2]) + x;
                     trimmed_data.push_back(input_fields[f][idx]);
                 }
             }
@@ -198,7 +157,7 @@ void MLCouplingMaia::preprocess_input_phydll(
 
                             for (int z = 0; z < cubeD; ++z) {
                                 for (int x = 0; x < cubeD; ++x) {
-                                    size_t idx = z * cubeD * cubeD + local_y * cubeD + x;
+                                    int idx = z * cubeD * cubeD + local_y * cubeD + x;
                                     double val = cube[idx];
                                     csv << cube_id << "," << f << "," << x << "," << z << "," << val << "\n";
                                 }
@@ -221,16 +180,16 @@ void MLCouplingMaia::preprocess_input_phydll(
     m_preFieldCubes = field_cubes; 
     
     for (int f = 0; f < nFields; ++f) {
-        input_fields_pre[iter][f].resize(activeFieldSize);
+        input_fields_pre[iter][f].resize(activeFieldCells);
         input_fields_pre[iter][f] = (std::move(field_cubes[f]));
     }
     //input_fields_pre.push_back(std::move(flat));
 
-    // Interleave into [num_cubes * nFields * cubeD³]
-    /*size_t num_cubes = field_cubes[0].size() / (cubeSize);
+    // Interleave into [numCubes * nFields * cubeD³]
+    /*size_t numCubes = field_cubes[0].size() / (cubeSize);
     std::vector<double> flat;
-    flat.reserve(num_cubes * nFields * cubeSize);
-    for (size_t i = 0; i < num_cubes; ++i) {
+    flat.reserve(numCubes * nFields * cubeSize);
+    for (size_t i = 0; i < numCubes; ++i) {
         for (int f = 0; f < nFields; ++f) {
             flat.insert(flat.end(),
                         field_cubes[f].begin() + i * cubeSize,
@@ -240,73 +199,41 @@ void MLCouplingMaia::preprocess_input_phydll(
     input_fields_pre.push_back(std::move(flat));*/
 }
 
-void MLCouplingMaia::preprocess_input_aix(
-    std::vector<double*>& input_fields, 
-    // Now interpreted as: outer vector = batch elements,
-    // inner vector = time steps, innermost vector = cube data of one cube.
-    std::vector<std::vector<std::vector<double>>>& input_fields_pre)
-{
-    int nCubes = zs.size() * ys.size() * xs.size();
-    // Desired batch dimension = nFields * nCubes.
-    int requiredBatch = nFields * nCubes;
-    
-    // Instead of having the outer vector sized by the sequence (time), we now want it sized by batch.
-    if (input_fields_pre.size() != static_cast<size_t>(requiredBatch)) {
-        input_fields_pre.clear();
-        input_fields_pre.resize(requiredBatch);
-        // Note: The inner vectors (the time series for each batch element) will be built incrementally.
+inline void MLCouplingMaiaPhyDLL::inference(){
+    // input_fields_pre: [sequenceLen][field][numCubes * cubeD³]
+    for (int t = 0; t < sequenceLen; ++t) { 
+        for(int f = 0; f < nFields; f++){         
+            double* ptr = input_fields_pre[t][f].data();  
+            std::cout << "Sending " << input_fields_pre[t].size() << " doubles "<< std::endl;
+            couplingStrategy->setField(&ptr, (char*)"Python-DL-FIELD-INPUT-0");
+            couplingStrategy->setField(&ptr, (char*)"Python-DL-FIELD-INPUT-1");
+            couplingStrategy->setField(&ptr, (char*)"Python-DL-FIELD-INPUT-2");
+        }   
+        couplingStrategy->sendFields();
     }
-    
-    // Process each field separately.
-    for (int f = 0; f < nFields; ++f) {
-        std::vector<double> trimmed_data;
-        trimmed_data.reserve(activeFieldSize);
-        // Same as before: extract the “trimmed” data for field f.
-        for (int z = nGhostLayers; z < nCells[0] - nGhostLayers; ++z) {
-            for (int y = nGhostLayers; y < nCells[1] - nGhostLayers; ++y) {
-                for (int x = nGhostLayers; x < nCells[2] - nGhostLayers; ++x) {
-                    size_t idx = (z * nCells[1] * nCells[2]) + (y * nCells[2]) + x;
-                    trimmed_data.push_back(input_fields[f][idx]);
-                }
-            }
-        }
+
+    couplingStrategy->receiveFields();
+
+    output_fields_post.resize(3);
+    for(int f = 0; f < nFields; f++){         
+        output_fields_post[f].resize(numCubes * cubeSize);
         
-        // Extract cubes from the trimmed data.
-        // Here, extract_cubes returns a vector of cubes for the given field.
-        // Each cube is a vector<double> of length cubeD*cubeD*cubeD.
-        std::vector<std::vector<double>> cubes = extract_cubes(trimmed_data.data());
-        
-        // Optional: Check that the number of cubes is as expected.
-        assert(cubes.size() == static_cast<size_t>(nCubes));
-        
-        // Now, instead of storing the cubes under the time step index,
-        // we place each cube into its proper "batch" slot.
-        // The batch index for field f and cube cube_idx is: f * nCubes + cube_idx.
-        for (size_t cube_idx = 0; cube_idx < cubes.size(); ++cube_idx) {
-            int batch_index = f * nCubes + static_cast<int>(cube_idx);
-            // Instead of overwriting an entire vector (as before) we push_back a new time step.
-            // Each call to preprocess_input adds one new time step for each batch element.
-            input_fields_pre[batch_index].push_back(std::move(cubes[cube_idx]));
-        }
+        double* ptr = output_fields_post[f].data();
+
+        // Create a writable buffer for the label
+        constexpr int label_size = 128;  // or LL_CHAR if defined
+        char label[label_size] = {0};
+
+        // Initialize the label with the literal string
+        std::string fieldlabel = "Python-DL-FIELD-OUTPUT" + std::to_string(f);
+        strncpy(label, fieldlabel.c_str(), label_size - 1);
+        label[label_size - 1] = '\0'; // null terminate to be safe
+
+        couplingStrategy->getField(&ptr, label); // now label is writable
     }
 }
 
-void MLCouplingMaia::inference(
-    std::vector<std::vector<std::vector<double>>>& input_fields_pre, 
-    std::vector<std::vector<double>>& output_fields_post)
-{
-    if (!coupling_strategy) {
-        std::cerr << "ERROR: No coupling strategy set!\n";
-        return;
-    }
-    
-    coupling_strategy->inference(input_fields_pre, output_fields_post);
-}
-
-void MLCouplingMaia::postprocess_output(
-    std::vector<std::vector<double>>& output_fields_post,  // Flat, interleaved data (all cubes)
-    std::vector<double*>& output_fields)        // Output: three reconstructed full volumes
-{
+inline void MLCouplingMaiaPhyDLL::postprocess_output()  {      // Output: three reconstructed full volumes
     //#ifdef OUTPUT_FIELDS
     /*{
         int target_y = 2;  // Global y you want
@@ -321,14 +248,14 @@ void MLCouplingMaia::postprocess_output(
         int nCubesX = trimmed_x / cubeD;
 
         int cubeSize = cubeD * cubeD * cubeD;
-        int num_cubes = output_fields_post.size() / (nFields * cubeSize);
+        int numCubes = output_fields_post.size() / (nFields * cubeSize);
 
         std::ostringstream filename;
         filename << "cubes_received_y_slice_.csv";
         std::ofstream csv(filename.str());
         csv << "cube_id,field,x,z,value\n";
 
-        for (int cube_id = 0; cube_id < num_cubes; ++cube_id) {
+        for (int cube_id = 0; cube_id < numCubes; ++cube_id) {
             int cube_idx = cube_id;
 
             int zc = cube_id / (nCubesX * nCubesY);
@@ -393,7 +320,7 @@ void MLCouplingMaia::postprocess_output(
     //= activecells
 
     //size_t volumeSize = static_cast<size_t>(Nx * Ny * Nz);
-    //=activeFieldSize
+    //=activeFieldCells
     //const int numFields = 3;  // for example, u, v, w
     //=nFields
 
@@ -401,8 +328,8 @@ void MLCouplingMaia::postprocess_output(
     // Step 1. Deinterleave the flat vector into 3 separate vectors (one per field)
     // ------------------------------------------------------------------------
     //size_t cubeSize = static_cast<size_t>(cubeD * cubeD * cubeD);
-    size_t groupSize = nFields * cubeSize; // data for one cube across all fields
-    size_t numCubes = output_fields_post.size() / groupSize;
+    //size_t groupSize = nFields * cubeSize; // data for one cube across all fields
+    //size_t numCubes = output_fields_post.size() / groupSize;
 
     // Create three temporary vectors to store concatenated cube data for each field.
     std::vector<std::vector<double>> field_cubes(nFields);
@@ -435,7 +362,7 @@ void MLCouplingMaia::postprocess_output(
 
     // Prepare the weight grid (to count contributions at each voxel)
     //NxFull * NyFull * NzFull
-    std::vector<double> weight(fieldSize, 0.0);
+    std::vector<double> weight(fullFieldCells, 0.0);
 
     // Recompute the extraction starting positions (xs, ys, zs)
     //
@@ -504,7 +431,7 @@ void MLCouplingMaia::postprocess_output(
     // The cubes were extracted (and later deinterleaved) in the same order as defined by
     // iterating over z, then y, then x coordinates given by zs, ys, xs.
     for (int f = 0; f < nFields; ++f){
-        size_t cubeIndex = 0;
+        int cubeIndex = 0;
         // Loop over the cube starting positions in the same order as extraction.
         for (int z0 : zs) {
             for (int y0 : ys) {
@@ -533,7 +460,7 @@ void MLCouplingMaia::postprocess_output(
         }
 
         // Normalize the full volume by dividing each voxel by its contribution count.
-        for (size_t i = 0; i < fieldSize; ++i){
+        for (int i = 0; i < fullFieldCells; ++i){
             if (weight[i] > 0.0){
                 output_fields[f][i] /= weight[i];
             }
@@ -562,139 +489,12 @@ void MLCouplingMaia::postprocess_output(
     //#endif
 }
 
-MPI_Comm MLCouplingMaia::getComm(){
-    return coupling_strategy->getComm();
-}
-
-void MLCouplingMaia::finalize() {
-    if (coupling_strategy) {
-        coupling_strategy->finalize();
-        delete coupling_strategy;
-        coupling_strategy = nullptr;
+inline void MLCouplingMaiaPhyDLL::finalize() {
+    if (couplingStrategy) {
+        couplingStrategy->finalize();
+        delete couplingStrategy;
+        couplingStrategy = nullptr;
     }
 }
 
-std::vector<int> MLCouplingMaia::linspace(int start, int end, int count) {
-    std::vector<int> result(count);
-    double step = (end - start) / static_cast<double>(std::max(count - 1, 1));
-    for (int i = 0; i < count; ++i) {
-        result[i] = static_cast<int>(start + std::round(i * step));
-    }
-    return result;
-}
-
-std::vector<std::vector<double>> MLCouplingMaia::extract_cubes(const double* data){
-    std::vector<std::vector<double>> cubes;
-
-    // add origin cube like Python 
-    /*zs.insert(zs.begin(), 0);
-    ys.insert(ys.begin(), 0);
-    xs.insert(xs.begin(), 0);*/
-
-    for (int z0 : zs) {
-        for (int y0 : ys) {
-            for (int x0 : xs) {
-                std::vector<double> cube(cubeD * cubeD * cubeD);
-                for (int dz = 0; dz < cubeD; ++dz) {
-                    for (int dy = 0; dy < cubeD; ++dy) {
-                        for (int dx = 0; dx < cubeD; ++dx) {
-                            int src_idx = (z0 + dz) * nActiveCells[1] * nActiveCells[2] + (y0 + dy) * nActiveCells[2] + (x0 + dx);
-                            int cube_idx = dz * cubeD * cubeD + dy * cubeD + dx;
-                            cube[cube_idx] = data[src_idx];
-                        }
-                    }
-                }
-                cubes.push_back(std::move(cube));
-            }
-        }
-    }
-
-    return cubes;
-}
-
-void MLCouplingMaia::exportCubesToCSV(const std::string& filename)
-{
-    // Sanity checks
-    if (m_preFieldCubes.empty() || m_postFieldCubes.empty()) {
-        std::cerr << "[exportCubesToCSV] Error: no stored cubes. "
-                  << "Did you run preprocess/postprocess already?\n";
-        return;
-    }
-    if (m_preFieldCubes.size() != static_cast<size_t>(nFields) ||
-        m_postFieldCubes.size() != static_cast<size_t>(nFields))
-    {
-        std::cerr << "[exportCubesToCSV] Error: mismatch in #fields.\n";
-        return;
-    }
-
-    // Prepare output
-    std::ofstream ofs(filename);
-    if (!ofs.is_open()) {
-        std::cerr << "[exportCubesToCSV] Could not open '" << filename << "' for writing.\n";
-        return;
-    }
-
-    // Write header
-    ofs << "field,cubeIndex,global_x,global_y,global_z,valPre,valPost\n";
-
-    // The number of cubes is deduced from one of the fields (all should match)
-    // e.g. m_preFieldCubes[f].size() == numCubes*cubeSize
-    size_t numCubes = 0;
-    if (!m_preFieldCubes[0].empty()) {
-        numCubes = m_preFieldCubes[0].size() / cubeSize;
-    }
-
-    // We re-use the same iteration order that was used in your extract code:
-    //   size_t cubeIndex = 0;
-    //   for (int z0 : zs) { for (int y0 : ys) { for (int x0 : xs) {
-
-    // Because that is how you matched each "cubeIndex" to (z0,y0,x0).
-    // So we do the same:
-
-    size_t cubeIndex = 0;
-    // Outer loops over the "start" of each cube
-    for (int z0 : zs) {
-        for (int y0 : ys) {
-            for (int x0 : xs) {
-                // For each cube, loop over local voxel coords
-                for (int dz = 0; dz < cubeD; ++dz) {
-                    for (int dy = 0; dy < cubeD; ++dy) {
-                        for (int dx = 0; dx < cubeD; ++dx) {
-                            // Compute global coords in the full volume
-                            int global_z = z0 + dz + nGhostLayers;
-                            int global_y = y0 + dy + nGhostLayers;
-                            int global_x = x0 + dx + nGhostLayers;
-
-                            // local offset inside this cube
-                            int localIndex = dz * (cubeD * cubeD) + dy * cubeD + dx;
-
-                            // For each field, we can store a row
-                            // or you can do a single field at a time; up to you.
-                            for (int f = 0; f < nFields; ++f) {
-                                // Pre
-                                double valPre =
-                                    m_preFieldCubes[f][ cubeIndex * cubeSize + localIndex ];
-
-                                // Post
-                                double valPost =
-                                    m_postFieldCubes[f][ cubeIndex * cubeSize + localIndex ];
-
-                                ofs << f << ","
-                                    << cubeIndex << ","
-                                    << global_x << ","
-                                    << global_y << ","
-                                    << global_z << ","
-                                    << valPre  << ","
-                                    << valPost << "\n";
-                            }
-                        } // dx
-                    } // dy
-                } // dz
-                ++cubeIndex;
-            } // x0
-        } // y0
-    } // z0
-
-    ofs.close();
-    std::cout << "[exportCubesToCSV] Finished writing " << filename << "\n";
-}
+#endif // ML_COUPLING_MAIA_PHYDLL_HPP
