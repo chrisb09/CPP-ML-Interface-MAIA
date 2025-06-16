@@ -53,6 +53,9 @@ protected:
     std::vector<int64_t> outputShape;
     int batchSize;
 
+    double* flatArray;
+    double* flatArrayOut;
+
     /*AIxeleratorService<std::vector<std::vector<std::vector<double>>>>* aixelerator;*/
 };
 

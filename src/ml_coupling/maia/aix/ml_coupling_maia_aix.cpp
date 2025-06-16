@@ -56,23 +56,17 @@ void MLCouplingMaiaAix::setup(
     
 
     //IN
-    size_t size = 0;
+    size_t totalElements = nFields * numCubes * sequenceLen * cubeD * cubeD * cubeD;
+    flatArray = new double[totalElements];
+   /* size_t size = 0;
     for (const auto& v2 : input_fields_pre) {
         for (const auto& v1 : v2) {
             size += v1.size();
         }
     }
     // Allocate memory for flattened array
-    double* flatArray = new double[size];
-    // Fill the flat array with values from the 3D input_fields_pretor
-    size_t index = 0;
-    for (const auto& v2 : input_fields_pre) {
-        for (const auto& v1 : v2) {
-            for (double value : v1) {
-                flatArray[index++] = value;
-            }
-        }
-    }
+    flatArray = new double[size];*/
+    
     
     //OUT
     output_fields_post.resize(outputShape[0]);
@@ -83,13 +77,13 @@ void MLCouplingMaiaAix::setup(
         }
     }
 
-    size = 0;
+    size_t size = 0;
     for (const auto& v2 : output_fields_post) {
         for (const auto& v1 : v2) {
             size += v1.size();
         }
     }
-    double* flatArrayOut = new double[size];
+    flatArrayOut = new double[size];
     
     couplingStrategy->setup(
         model_path,
@@ -102,14 +96,6 @@ void MLCouplingMaiaAix::setup(
         /*aixelerator*/
     );
 
-    index = 0;
-    for (size_t i = 0; i < outputShape[0]; ++i) {
-        for (size_t j = 0; j < outputShape[1]; ++j) {
-            for (size_t k = 0; k < outputShape[2]; ++k) {
-                output_fields_post[i][j][k] = flatArray[index++];
-            }
-        }
-    }
 
 }
 
@@ -158,6 +144,16 @@ void MLCouplingMaiaAix::preprocess_input(){
             input_fields_pre[batch_index].push_back(std::move(cubes[cube_idx]));
         }
     }
+
+    // Fill the flat array with values from the 3D input_fields_pretor
+    size_t index = 0;
+    for (const auto& v2 : input_fields_pre) {
+        for (const auto& v1 : v2) {
+            for (double value : v1) {
+                flatArray[index++] = value;
+            }
+        }
+    }
 }
 
 
@@ -170,6 +166,15 @@ void MLCouplingMaiaAix::inference(){
 //In: [batchdim = nFields*numCubes][forecastwindow = 2][cubeD^3 = 512]
 //Out: [forecastwindow][field][num_cubes * cubeD³]
 void MLCouplingMaiaAix::postprocess_output(){
+    
+    size_t index = 0;
+    for (size_t i = 0; i < outputShape[0]; ++i) {
+        for (size_t j = 0; j < outputShape[1]; ++j) {
+            for (size_t k = 0; k < outputShape[2]; ++k) {
+                output_fields_post[i][j][k] = flatArrayOut[index++];
+            }
+        }
+    }
     // For clarity, assume:
     //   - forecastWindow is a member variable (e.g., forecastWindow == 2)
     //   - cubeSize = cubeD³
