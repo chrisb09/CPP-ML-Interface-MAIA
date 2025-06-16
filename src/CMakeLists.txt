@@ -1,59 +1,53 @@
-add_library(mlCouplingLib INTERFACE)
+# Build a static library for cppinterface.
+# (dummy.cpp is a file that exists even if it is empty.)
+add_library(mlCouplingLib STATIC dummy.cpp)
 set_target_properties(mlCouplingLib PROPERTIES OUTPUT_NAME mlCoupling)
-target_compile_options(mlCouplingLib INTERFACE -Wno-deprecated-declarations)
 
+# Suppress deprecated warnings in this target.
+target_compile_options(mlCouplingLib PRIVATE -Wno-deprecated-declarations)
+
+# Link against the external libraries.
 if(WITH_AIX)
-    #target_sources(
-        #mlCouplingLib 
-            #PUBLIC 
-                #ml_coupling_strategy/aix/ml_coupling_strategy_aix.cpp
-                #ml_coupling/maia/aix/ml_coupling_maia_aix.cpp
-    #)
-    target_link_libraries(
-        mlCouplingLib
-            INTERFACE 
-            ${AIX_BUILD_DIR}/lib/libAIxeleratorService.so   
+    target_link_libraries(mlCouplingLib 
+        PRIVATE ${AIX_BUILD_DIR}/lib/libAIxeleratorService.a
     )
 endif()
 
 if(WITH_PHYDLL)
-    #target_sources(
-        #mlCouplingLib 
-            #PUBLIC 
-                #ml_coupling_strategy/phydll/ml_coupling_strategy_phydll.cpp
-                #ml_coupling/maia/phydll/ml_coupling_maia_phydll.cpp
-    #)
-    target_link_libraries(
-        mlCouplingLib
-            INTERFACE 
-            ${PHYDLL_BUILD_DIR}/lib/libphydll.so  
+    target_link_libraries(mlCouplingLib 
+        PRIVATE ${PHYDLL_BUILD_DIR}/lib/libphydll.a  
     )
 endif()
 
-
-# Tell consumers of mlCouplingLib where to find your headers.
-target_include_directories(
-    mlCouplingLib
-        INTERFACE
-            $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
-            $<INSTALL_INTERFACE:include>
+# Make the appropriate header directories available to mlCouplingLib and its consumers.
+target_include_directories(mlCouplingLib
+    PUBLIC
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
 )
 
 if(WITH_AIX)
-    target_include_directories(mlCouplingLib INTERFACE ${AIX_BUILD_DIR}/include)
-endif()
-if(WITH_PHYDLL)
-    target_include_directories(mlCouplingLib INTERFACE ${PHYDLL_BUILD_DIR}/include)
+    target_include_directories(mlCouplingLib 
+        PUBLIC ${AIX_BUILD_DIR}/include
+    )
 endif()
 
-target_sources(
-    mlCouplingLib
-        INTERFACE
-            ${PROJECT_SOURCE_DIR}/include/ml_coupling_strategy/ml_coupling_strategy.hpp
-            ${PROJECT_SOURCE_DIR}/include/ml_coupling/ml_coupling.hpp
-            #${CMAKE_CURRENT_SOURCE_DIR}/ml_coupling/maia/ml_coupling_maia.cpp
+if(WITH_PHYDLL)
+    target_include_directories(mlCouplingLib 
+        PUBLIC ${PHYDLL_BUILD_DIR}/include
+    )
+endif()
+
+# Provide the necessary header files (they contain the template implementations).
+target_sources(mlCouplingLib
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/include/ml_coupling_strategy/ml_coupling_strategy.hpp
+        ${PROJECT_SOURCE_DIR}/include/ml_coupling/ml_coupling.hpp
+        # Uncomment the following if you have .cpp files that are not header-only:
+        # ${CMAKE_CURRENT_SOURCE_DIR}/ml_coupling/maia/ml_coupling_maia.cpp
 )
 
+# Install the library target.
 install(
     TARGETS mlCouplingLib
     LIBRARY DESTINATION lib
@@ -61,10 +55,10 @@ install(
     RUNTIME DESTINATION bin
 )
 
-# Install your header files from include/
+# Install header files.
 install(
     DIRECTORY ${PROJECT_SOURCE_DIR}/include/
     DESTINATION include
     FILES_MATCHING
-    PATTERN "*.hpp"
+        PATTERN "*.hpp"
 )

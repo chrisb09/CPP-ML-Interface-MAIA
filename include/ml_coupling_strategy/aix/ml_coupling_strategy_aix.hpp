@@ -35,7 +35,7 @@ public:
     MPI_Comm getComm();
 
 private:
-    AIxeleratorService<In> aixelerator;
+    AIxeleratorService<In>* aixelerator;
 
     bool is_Aix_initialized = false;
 };
@@ -62,12 +62,12 @@ inline void MLCouplingStrategyAix<In, Out>::setup(
     int batch_size, 
     MPI_Comm comm
 ) {
-    this->aixelerator = AIxeleratorService<In>(
+    this->aixelerator = new AIxeleratorService<In>(
         model_path, 
         input_shape, 
-        input_fields_ptr, 
+        &input_fields_ptr, 
         output_shape, 
-        output_fields_ptr,
+        &output_fields_ptr,
         batch_size, 
         comm
     );
@@ -75,7 +75,7 @@ inline void MLCouplingStrategyAix<In, Out>::setup(
 
 template <typename In, typename Out>
 inline void MLCouplingStrategyAix<In, Out>::inference(){
-    aixelerator.inference();
+    aixelerator->inference();
 }
 
 template <typename In, typename Out>

@@ -26,7 +26,7 @@ public:
     MLCouplingMaiaAix();
     ~MLCouplingMaiaAix();
 
-    virtual void init() = 0;
+    void init();
     
     void setup(
         std::vector<double*> input_fields_ptr, 
@@ -133,7 +133,7 @@ inline void MLCouplingMaiaAix::preprocess_input(){
         // Now, instead of storing the cubes under the time step index,
         // we place each cube into its proper "batch" slot.
         // The batch index for field f and cube cube_idx is: f * numCubes + cube_idx.
-        for (int cube_idx = 0; cube_idx < cubes.size(); ++cube_idx) {
+        for (size_t cube_idx = 0; cube_idx < cubes.size(); ++cube_idx) {
             int batch_index = f * numCubes + static_cast<int>(cube_idx);
             // Instead of overwriting an entire vector (as before) we push_back a new time step.
             // Each call to preprocess_input adds one new time step for each batch element.
