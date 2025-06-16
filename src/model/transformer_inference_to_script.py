@@ -58,7 +58,17 @@ class PositionalEncoder(nn.Module):
             torch.Tensor: Tensor with positional encodings added.
         """
         # Add encoding along the time dimension.
-        x = x + self.pe[:x.size(self.x_dim)]
+        if self.x_dim == 1:
+            # self.pe[:x.size(1)] has shape [seq, 1, d_model],
+            # so transpose it to [1, seq, d_model] for proper broadcasting.
+            pe = self.pe[:x.size(1)].transpose(0, 1)
+        else:
+            # In the non-batch_first case, the slice already works correctly.
+            pe = self.pe[:x.size(0)]
+            
+        x = x + pe
+        
+        #x = x + self.pe[:x.size(self.x_dim)]#before adding the above for batchfirst
         return self.dropout(x)
     
 

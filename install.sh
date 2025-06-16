@@ -47,7 +47,7 @@ if [ ! -f "${CPP_ML_ROOT}/extern/aixeleratorservice/BUILD/lib/libAIxeleratorServ
 
     cd ${CPP_ML_ROOT}/extern/aixeleratorservice/
     mkdir -p BUILD && cd BUILD
-    cmake .. -DWITH_TORCH=ON -DTorch_DIR=${CPP_ML_ROOT}/extern/libtorch/share/cmake/Torch -DBUILD_SHARED_LIBS=OFF
+    cmake .. -DWITH_TORCH=ON -DTorch_DIR=${CPP_ML_ROOT}/extern/libtorch/share/cmake/Torch
     cmake --build . -j && cmake --install .
 
     echo "AIxeleratorService installation finished!"

@@ -1,6 +1,6 @@
-//#include "ml_coupling/maia/aix/ml_coupling_maia_aix.hpp"
-//#include "ml_coupling/maia/ml_coupling_maia.hpp"
-//#include "ml_coupling_strategy/aix/ml_coupling_strategy_aix.hpp"
+#include "ml_coupling/maia/aix/ml_coupling_maia_aix.hpp"
+#include "ml_coupling/maia/ml_coupling_maia.hpp"
+#include "ml_coupling_strategy/aix/ml_coupling_strategy_aix.hpp"
 
 #include <iostream>
 #include <stdexcept>
@@ -13,7 +13,8 @@
 #include <fstream>
 #include <sstream>
 #include <cassert>
-/*
+/*#include "aixeleratorService/aixeleratorService.h"*/
+
 // Constructor and destructor
 MLCouplingMaiaAix::MLCouplingMaiaAix() = default;
 
@@ -22,7 +23,7 @@ MLCouplingMaiaAix::~MLCouplingMaiaAix() {
 }
 
 void MLCouplingMaiaAix::init() {
-    couplingStrategy = new MLCouplingStrategyAix<std::vector<std::vector<std::vector<double>>>, std::vector<std::vector<std::vector<double>>>>();
+    couplingStrategy = new MLCouplingStrategyAix<double, double>();
     couplingStrategy->init();
 }
 
@@ -42,15 +43,74 @@ void MLCouplingMaiaAix::setup(
     outputShape = {nFields * numCubes, 2, cubeD * cubeD * cubeD};
     batchSize = inputShape[0]; //Since batch first = True; = nFields * num_cubes
 
+    
+   /* this->aixelerator = new AIxeleratorService<std::vector<std::vector<std::vector<double>>>>(
+        model_path,
+        inputShape,
+        &input_fields_pre,
+        outputShape,
+        &output_fields_post,
+        batchSize,
+        app_comm
+    );*/
+    
+
+    //IN
+    size_t size = 0;
+    for (const auto& v2 : input_fields_pre) {
+        for (const auto& v1 : v2) {
+            size += v1.size();
+        }
+    }
+    // Allocate memory for flattened array
+    double* flatArray = new double[size];
+    // Fill the flat array with values from the 3D input_fields_pretor
+    size_t index = 0;
+    for (const auto& v2 : input_fields_pre) {
+        for (const auto& v1 : v2) {
+            for (double value : v1) {
+                flatArray[index++] = value;
+            }
+        }
+    }
+    
+    //OUT
+    output_fields_post.resize(outputShape[0]);
+    for (size_t i = 0; i < outputShape[0]; ++i) {
+        output_fields_post[i].resize(outputShape[1]);
+        for (size_t j = 0; j < outputShape[1]; ++j) {
+            output_fields_post[i][j].resize(outputShape[2]);
+        }
+    }
+
+    size = 0;
+    for (const auto& v2 : output_fields_post) {
+        for (const auto& v1 : v2) {
+            size += v1.size();
+        }
+    }
+    double* flatArrayOut = new double[size];
+    
     couplingStrategy->setup(
         model_path,
         inputShape,
-        input_fields_pre,
+        flatArray,
         outputShape,
-        output_fields_post,
+        flatArrayOut,
         batchSize,
         app_comm
+        /*aixelerator*/
     );
+
+    index = 0;
+    for (size_t i = 0; i < outputShape[0]; ++i) {
+        for (size_t j = 0; j < outputShape[1]; ++j) {
+            for (size_t k = 0; k < outputShape[2]; ++k) {
+                output_fields_post[i][j][k] = flatArray[index++];
+            }
+        }
+    }
+
 }
 
 //In: [sequenceLen][field][num_cubes * cubeD³]
@@ -74,7 +134,7 @@ void MLCouplingMaiaAix::preprocess_input(){
         for (int z = nGhostLayers; z < nCells[0] - nGhostLayers; ++z) {
             for (int y = nGhostLayers; y < nCells[1] - nGhostLayers; ++y) {
                 for (int x = nGhostLayers; x < nCells[2] - nGhostLayers; ++x) {
-                    size_t idx = (z * nCells[1] * nCells[2]) + (y * nCells[2]) + x;
+                    int idx = (z * nCells[1] * nCells[2]) + (y * nCells[2]) + x;
                     trimmed_data.push_back(input_fields[f][idx]);
                 }
             }
@@ -131,8 +191,8 @@ void MLCouplingMaiaAix::postprocess_output(){
             // Get the predicted cube from the last forecast time step.
             const std::vector<double>& predCube = output_fields_post[batch_index][forecastWindow - 1];
             // Copy the cube data into the proper offset.
-            for (size_t i = 0; i < cubeSize; ++i) {
-                field_cubes[f][static_cast<size_t>(cube) * cubeSize + i] = predCube[i];
+            for (int i = 0; i < cubeSize; ++i) {
+                field_cubes[f][static_cast<int>(cube) * cubeSize + i] = predCube[i];
             }
         }
     }
@@ -183,7 +243,7 @@ void MLCouplingMaiaAix::postprocess_output(){
     // For each field, loop over the cube starting positions (ordered as in extraction)
     // and add in the cube’s contributions to the full volume.
     for (int f = 0; f < nFields; ++f) {
-        size_t cubeIndex = 0;
+        int cubeIndex = 0;
         for (int z0 : zs) {
             for (int y0 : ys) {
                 for (int x0 : xs) {
@@ -209,7 +269,7 @@ void MLCouplingMaiaAix::postprocess_output(){
             }
         }
         // Normalize each voxel by the number of contributions.
-        for (size_t i = 0; i < fullFieldCells; ++i) {
+        for (int i = 0; i < fullFieldCells; ++i) {
             if (weight[i] > 0.0) {
                 output_fields[f][i] /= weight[i];
             }
@@ -231,4 +291,12 @@ void MLCouplingMaiaAix::finalize() {
         delete couplingStrategy;
         couplingStrategy = nullptr;
     }
-}*/
+}
+
+/*
+
+// Include strategy headers instead of .cpp files.
+#ifdef WITH_AIX
+//#include "ml_coupling_strategy/aix/ml_coupling_strategy_aix.hpp"
+#endif
+*/

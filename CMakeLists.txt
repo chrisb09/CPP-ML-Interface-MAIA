@@ -9,6 +9,7 @@ project(ML-COUPLER VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+add_compile_options("-D_GLIBCXX_USE_CXX11_ABI=1")
 
 option(WITH_AIX "Enable AIxeleratorService as inference strategy." OFF)
 if(WITH_AIX)
