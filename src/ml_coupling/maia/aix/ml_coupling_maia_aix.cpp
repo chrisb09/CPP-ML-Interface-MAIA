@@ -42,21 +42,10 @@ void MLCouplingMaiaAix::setup(
     // Output ist dann [batchdim = nFields*numCubes][forecastwindow = 2][cubeD^3 = 512]
     outputShape = {nFields * numCubes, 2, cubeD * cubeD * cubeD};
     batchSize = inputShape[0]; //Since batch first = True; = nFields * num_cubes
-
-    
-   /* this->aixelerator = new AIxeleratorService<std::vector<std::vector<std::vector<double>>>>(
-        model_path,
-        inputShape,
-        &input_fields_pre,
-        outputShape,
-        &output_fields_post,
-        batchSize,
-        app_comm
-    );*/
     
 
     //IN
-    size_t totalElements = nFields * numCubes * sequenceLen * cubeD * cubeD * cubeD;
+    //size_t totalElements = nFields * numCubes * sequenceLen * cubeD * cubeD * cubeD;
     flatArray = new double[totalElements];
    /* size_t size = 0;
     for (const auto& v2 : input_fields_pre) {
@@ -93,7 +82,6 @@ void MLCouplingMaiaAix::setup(
         flatArrayOut,
         batchSize,
         app_comm
-        /*aixelerator*/
     );
 
 
@@ -131,6 +119,9 @@ void MLCouplingMaiaAix::preprocess_input(){
         // Each cube is a vector<double> of length cubeD*cubeD*cubeD.
         std::vector<std::vector<double>> cubes = extract_cubes(trimmed_data.data());
         
+        // ---------------------------
+        // 1) Save these per-field cube arrays so that later we can compare:
+        m_preFieldCubes = cubes; 
         // Optional: Check that the number of cubes is as expected.
         assert(cubes.size() == static_cast<size_t>(numCubes));
         
@@ -297,11 +288,3 @@ void MLCouplingMaiaAix::finalize() {
         couplingStrategy = nullptr;
     }
 }
-
-/*
-
-// Include strategy headers instead of .cpp files.
-#ifdef WITH_AIX
-//#include "ml_coupling_strategy/aix/ml_coupling_strategy_aix.hpp"
-#endif
-*/
