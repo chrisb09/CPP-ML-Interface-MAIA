@@ -21,7 +21,7 @@ MLCouplingMaiaPhyDLL::~MLCouplingMaiaPhyDLL() {
 }
 
 void MLCouplingMaiaPhyDLL::init() {
-    couplingStrategy = new MLCouplingStrategyPhyDLL<std::vector<std::vector<std::vector<double>>>, double*>();
+    couplingStrategy = new MLCouplingStrategyPhyDLL<std::vector<std::vector<std::vector<double>>>, std::vector<std::vector<double>>>();
     couplingStrategy->init();
 }
 
@@ -59,71 +59,16 @@ void MLCouplingMaiaPhyDLL::setup(
         #pragma GCC diagnostic pop
     }
 
-    outputShape = {nFields * numCubes, 2, cubeD * cubeD * cubeD};
-    output_fields_post = new double[outputShape[0] * outputShape[1] * outputShape[2]];
-
-    cubeSrcBases.resize(numCubes);
-    int idx = 0;
-    for (int z0 : zs) {
-        for (int y0 : ys) {
-            for (int x0 : xs) {
-                // For a cube starting at (x0, y0, z0) in the trimmed region,
-                // the corresponding global (input_fields) base offset is:
-                int base = ( (z0 + nGhostLayers) * yzStride ) +
-                           ( (y0 + nGhostLayers) * nCells[2] ) +
-                           ( x0 + nGhostLayers );
-                cubeSrcBases[idx++] = base;
-            }
-        }
-    }
-
-    cubeDestBases.resize(nFields * numCubes);
-    for (int f = 0; f < nFields; ++f) {
-        for (int c = 0; c < numCubes; ++c) {
-            int batch_index = f * numCubes + c;
-            cubeDestBases[batch_index] = batch_index * sequenceLen * cubeSize;
-        }
-    }
-
-    cubeOffsets.resize(cubeSize);
-    // Precompute relative offsets inside a cube.
-    int offsetIdx = 0;
-    for (int dz = 0; dz < cubeD; ++dz) {
-        for (int dy = 0; dy < cubeD; ++dy) {
-            for (int dx = 0; dx < cubeD; ++dx) {
-                // For an element at local coordinate (dz, dy, dx) in the cube,
-                // its offset in a full volume is:
-                cubeOffsets[offsetIdx++] = dz * yzStride + dy * nCells[2] + dx;
-            }
-        }
-    }
-
-    // Precompute base offsets for every cube extracted.
-    cubeBaseOffsets.resize(numCubes);
-    idx = 0;
-    for (int z0 : zs) {
-        for (int y0 : ys) {
-            for (int x0 : xs) {
-                // The cube's base is the (global) offset in the full volume for its (0,0,0) element.
-                // Add the ghost layer offset.
-                int base = (z0 + nGhostLayers) * yzStride 
-                        + (y0 + nGhostLayers) * nCells[2] 
-                        + (x0 + nGhostLayers);
-                cubeBaseOffsets[idx++] = base;
-            }
-        }
+    if (input_fields_pre.size() != 5){
+        input_fields_pre.resize(5);
     }
     
-
-    // The geometry never changes, precompute the weight map only once and store it.
-     // cached weight map; computed only during first call.
-    if (weight.size() != static_cast<size_t>(fullFieldCells)) {
-        weight.assign(fullFieldCells, 0.0);
-        for (int base : cubeBaseOffsets) {
-            // Simply add one contribution per voxel in the cube.
-            for (int off : cubeOffsets) {
-                weight[base + off] += 1.0;
-            }
+    if (output_fields_post.size() != 3){
+        output_fields_post.resize(3);
+        for (int f = 0; f < nFields; f++){   
+            if (output_fields_post[f].size() != numCubes * cubeSize) {
+                output_fields_post[f].resize(numCubes * cubeSize);
+            }  
         }
     }
 }
@@ -159,10 +104,11 @@ void MLCouplingMaiaPhyDLL::preprocess_input(){
         for (const auto& cube : cubes) {
             field_cubes[f].insert(field_cubes[f].end(), cube.begin(), cube.end());
         }
+        std::cout <<"fieldcubes " << field_cubes[f].size() << std::endl;
     }
     
     for (int f = 0; f < nFields; ++f) {
-        input_fields_pre[iter][f].resize(activeFieldCells);
+        input_fields_pre[iter][f].resize(field_cubes[f].size());
         input_fields_pre[iter][f] = (std::move(field_cubes[f]));
     }
     //input_fields_pre.push_back(std::move(flat));
@@ -194,7 +140,7 @@ void MLCouplingMaiaPhyDLL::inference(){
         couplingStrategy->sendFields();
     }
 
-    //ML does work here
+    //ML does work here in Python
 
     couplingStrategy->receiveFields();
 
@@ -216,114 +162,6 @@ void MLCouplingMaiaPhyDLL::inference(){
 }
 
 void MLCouplingMaiaPhyDLL::postprocess_output()  {      // Output: three reconstructed full volumes
-       // -------------------------------------------------------------------
-    // STEP 1: Create the weight map to count the number of contributions
-    // -------------------------------------------------------------------
-    std::vector<double> weight(fullFieldCells, 0.0);
-    for (int z0 : zs) {
-        for (int y0 : ys) {
-            for (int x0 : xs) {
-                for (int dz = 0; dz < cubeD; ++dz) {
-                    int global_z = z0 + dz + nGhostLayers;
-                    if (global_z >= nCells[0])
-                        continue;
-                    int zOffset = global_z * yzStride;
-                    for (int dy = 0; dy < cubeD; ++dy) {
-                        int global_y = y0 + dy + nGhostLayers;
-                        if (global_y >= nCells[1])
-                            continue;
-                        int yOffset = global_y * rowStride;
-                        for (int dx = 0; dx < cubeD; ++dx) {
-                            int global_x = x0 + dx + nGhostLayers;
-                            if (global_x >= nCells[2])
-                                continue;
-                            int vol_index = zOffset + yOffset + global_x;
-                            weight[vol_index] += 1.0;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    // -----------------------------------------------------------
-    // STEP 2: Clear the full field output volumes (for each field)
-    // -----------------------------------------------------------
-    for (int f = 0; f < nFields; ++f) {
-        // Only clear the interior region (leave ghost layers unchanged if needed)
-        for (int z = nGhostLayers; z < nCells[0] - nGhostLayers; ++z) {
-            int base_z = z * yzStride;
-            for (int y = nGhostLayers; y < nCells[1] - nGhostLayers; ++y) {
-                int start = base_z + y * rowStride + nGhostLayers;
-                int width = nCells[2] - 2 * nGhostLayers;
-                std::fill(output_fields[f] + start,
-                          output_fields[f] + start + width,
-                          0.0);
-            }
-        }
-    }
-    
-    // -------------------------------------------------------------------
-    // STEP 3: Reconstruct the full volumes by “pasting” each predicted cube.
-    // -------------------------------------------------------------------
-    // The cube predictions were produced in the same order as extraction:
-    // For each field f and cube index (from 0 to numCubes - 1):
-    //   batch_index = f * numCubes + cube_index
-    // We now map each cube back into the full volume.
-    const int numX = static_cast<int>(xs.size());
-    const int numY = static_cast<int>(ys.size());
-    // (Assuming xs, ys, zs are ordered and their product equals numCubes.)
-    for (int f = 0; f < nFields; ++f) {
-        for (int cube = 0; cube < numCubes; ++cube) {
-            int batch_index = f * numCubes + cube;
-            // Compute the flat offset in flatArrayOut for the last forecast step:
-            int flat_idx = (batch_index * 2 + (2 - 1)) * cubeSize;
-            const double* cubePtr = &output_fields_post[flat_idx];
-            
-            // Determine the cube starting indices (using the same nested‑loop order as in preprocessing).
-            int cube_index = cube;  // 0 <= cube < numCubes
-            int idxZ = cube_index / (numX * numY);
-            int rem  = cube_index % (numX * numY);
-            int idxY = rem / numX;
-            int idxX = rem % numX;
-            int x0 = xs[idxX];
-            int y0 = ys[idxY];
-            int z0 = zs[idxZ];
-            
-            // “Paste” the cube into the full volume for field f.
-            for (int dz = 0; dz < cubeD; ++dz) {
-                int global_z = z0 + dz + nGhostLayers;
-                if (global_z >= nCells[0])
-                    continue;
-                int zOffset = global_z * yzStride;
-                for (int dy = 0; dy < cubeD; ++dy) {
-                    int global_y = y0 + dy + nGhostLayers;
-                    if (global_y >= nCells[1])
-                        continue;
-                    int yOffset = global_y * rowStride;
-                    int dest_base = zOffset + yOffset + (x0 + nGhostLayers);
-                    int cube_row_offset = dz * (cubeD * cubeD) + dy * cubeD;
-                    for (int dx = 0; dx < cubeD; ++dx) {
-                        int global_x = x0 + dx + nGhostLayers;
-                        if (global_x >= nCells[2])
-                            continue;
-                        int vol_index = dest_base + dx;
-                        output_fields[f][vol_index] += cubePtr[cube_row_offset + dx];
-                    }
-                }
-            }
-        }
-        // Normalize by dividing each voxel by the number of contributions.
-        for (int i = 0; i < fullFieldCells; ++i) {
-            if (weight[i] > 0.0)
-                output_fields[f][i] /= weight[i];
-        }
-    }
-    
-
-
-
-
     //#ifdef OUTPUT_FIELDS
     /*{
         int target_y = 2;  // Global y you want
@@ -393,6 +231,27 @@ void MLCouplingMaiaPhyDLL::postprocess_output()  {      // Output: three reconst
     }*/
     //#endif
 
+    // === Parameters assumed available as member variables ===
+    // cubeD: The cube edge length.
+    // nCells: An int array (or vector) with { Nz, Ny, Nx }
+    //
+    // Note: In extract_cubes we used:
+    //   Nx = nCells[2], Ny = nCells[1], Nz = nCells[0]
+    
+    //int NxFull = nCells[2];
+    //int NyFull = nCells[1];
+    //int NzFull = nCells[0];
+
+    //int Nx = NxFull - 2 * nGhostLayers;
+    //int Ny = NyFull - 2 * nGhostLayers;
+    //int Nz = NzFull - 2 * nGhostLayers;
+    //= activecells
+
+    //size_t volumeSize = static_cast<size_t>(Nx * Ny * Nz);
+    //=activeFieldCells
+    //const int numFields = 3;  // for example, u, v, w
+    //=nFields
+
     // ------------------------------------------------------------------------
     // Step 1. Deinterleave the flat vector into 3 separate vectors (one per field)
     // ------------------------------------------------------------------------
@@ -401,11 +260,11 @@ void MLCouplingMaiaPhyDLL::postprocess_output()  {      // Output: three reconst
     //size_t numCubes = output_fields_post.size() / groupSize;
 
     // Create three temporary vectors to store concatenated cube data for each field.
-    /*std::vector<std::vector<double>> field_cubes(nFields);
+    std::vector<std::vector<double>> field_cubes(nFields);
     for (int f = 0; f < nFields; ++f) {
         field_cubes[f].reserve(numCubes * cubeSize);
-    }*/
-
+    }
+    std::cout << "1" << std::endl;
     // Iterate through each cube (as interleaved groups) and extract each field’s cube.
     /*for (size_t cubeIndex = 0; cubeIndex < numCubes; ++cubeIndex) {
         for (int f = 0; f < nFields; ++f) {
@@ -417,13 +276,10 @@ void MLCouplingMaiaPhyDLL::postprocess_output()  {      // Output: three reconst
             );
         }
     }*/
-   /*for (int f = 0; f < nFields; ++f) {
+   for (int f = 0; f < nFields; ++f) {
     field_cubes[f] = output_fields_post[f];
    }
-    
-    // ---------------------------------------------------
-    // Keep them for comparison with the pre-processing step:
-    m_postFieldCubes = field_cubes;
+    std::cout << "2" << std::endl;
 
     // ------------------------------------------------------------------------
     // Step 2. Reconstruct full volumes (for each field)
@@ -432,6 +288,29 @@ void MLCouplingMaiaPhyDLL::postprocess_output()  {      // Output: three reconst
     // Prepare the weight grid (to count contributions at each voxel)
     //NxFull * NyFull * NzFull
     std::vector<double> weight(fullFieldCells, 0.0);
+
+    std::cout << "3" << std::endl;
+    // Recompute the extraction starting positions (xs, ys, zs)
+    //
+    // For the extraction we computed coordinates using linspace:
+    //   auto xs = linspace(0, Nx - cubeD, concatX);
+    //   auto ys = linspace(0, Ny - cubeD, concatY);
+    //   auto zs = linspace(0, Nz - cubeD, concatZ);
+    //
+    // and then inserted a 0 at the beginning of each.
+    //int concatX = (Nx + cubeD - 1) / cubeD;
+    //int concatY = (Ny + cubeD - 1) / cubeD;
+    //int concatZ = (Nz + cubeD - 1) / cubeD;
+    /*auto xs = linspace(0, Nx - cubeD, concatX);  // assumed to return std::vector<int>
+    auto ys = linspace(0, Ny - cubeD, concatY);
+    auto zs = linspace(0, Nz - cubeD, concatZ);
+    xs.insert(xs.begin(), 0);
+    ys.insert(ys.begin(), 0);
+    zs.insert(zs.begin(), 0);  */
+    
+    //for (int& x : xs) x += nGhostLayers;
+    //for (int& y : ys) y += nGhostLayers;
+    //for (int& z : zs) z += nGhostLayers;
 
     // Build the weight grid by “painting” one cube at each starting position.
     for (int z0 : zs) {
@@ -454,6 +333,7 @@ void MLCouplingMaiaPhyDLL::postprocess_output()  {      // Output: three reconst
             }
         }
     }
+    std::cout << "4" << std::endl;
     // Fill outputfields at appropriate positions with 0
     for (int f = 0; f < nFields; ++f) {
         for (int z = nGhostLayers; z < nCells[0] - nGhostLayers; ++z) {
@@ -464,8 +344,9 @@ void MLCouplingMaiaPhyDLL::postprocess_output()  {      // Output: three reconst
                 }
             }
         }
-    }*/
+    }
 
+    std::cout << "5" << std::endl;
     /*for (int f = 0; f < nFields; ++f)
     {
         // Use the preallocated pointer from output_fields[i] (already set in setup())
@@ -477,7 +358,7 @@ void MLCouplingMaiaPhyDLL::postprocess_output()  {      // Output: three reconst
     // For each field, “stitch” the cubes back into the full volume.
     // The cubes were extracted (and later deinterleaved) in the same order as defined by
     // iterating over z, then y, then x coordinates given by zs, ys, xs.
-    /*for (int f = 0; f < nFields; ++f){
+    for (int f = 0; f < nFields; ++f){
         int cubeIndex = 0;
         // Loop over the cube starting positions in the same order as extraction.
         for (int z0 : zs) {
@@ -505,6 +386,7 @@ void MLCouplingMaiaPhyDLL::postprocess_output()  {      // Output: three reconst
                 }
             }
         }
+    std::cout << "6" << std::endl;
 
         // Normalize the full volume by dividing each voxel by its contribution count.
         for (int i = 0; i < fullFieldCells; ++i){
@@ -512,8 +394,30 @@ void MLCouplingMaiaPhyDLL::postprocess_output()  {      // Output: three reconst
                 output_fields[f][i] /= weight[i];
             }
         }
+    }
+
+    //#ifdef OUTPUT_FIELDS
+    /*{
+        std::ofstream csv_end("u_slice_y2_post_end.csv");
+        if (!csv_end.is_open()) {
+            std::cerr << "Error opening file u_slice_y2_post_start.csv for writing." << std::endl;
+        } else {
+            // Again, for field 0 (adjust if you want to export other fields)
+             for (int z = 0; z < nCells[0]; ++z) {
+                for (int x = 0; x < nCells[2]; ++x) {
+                    int idx = z * nCells[1] * nCells[2] + 2 * nCells[2] + x;
+                    csv_end << output_fields[0][idx];
+                    if (x != nCells[2] - 1)
+                        csv_end << ",";
+                }
+                csv_end << "\n";
+            }
+            csv_end.close();
+        }
     }*/
+    //#endif
 }
+
 
 void MLCouplingMaiaPhyDLL::finalize() {
     if (couplingStrategy) {

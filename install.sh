@@ -77,7 +77,7 @@ if [ ! -f "${CPP_ML_ROOT}/BUILD/lib/libmlCoupling.so" ]; then
     cd ${CPP_ML_ROOT}
     mkdir -p BUILD
     cd BUILD
-    cmake .. -DWITH_PHYDLL=OFF -DCMAKE_INSTALL_PREFIX=./ -DWITH_AIX=ON #-DWITH_NCSA=ON 
+    cmake .. -DWITH_PHYDLL=ON -DCMAKE_INSTALL_PREFIX=./ -DWITH_AIX=ON #-DWITH_NCSA=ON 
     cmake --build . -j && cmake --install .
 
     echo "CPP-ML-Interface installation finished!"
