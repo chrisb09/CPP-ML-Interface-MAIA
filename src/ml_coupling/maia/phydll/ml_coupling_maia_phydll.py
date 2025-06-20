@@ -105,26 +105,25 @@ def main():
         [[] * num_phy_procs],
     ]
     total_cells = sum(num_cells_per_process)
-    print(total_cells)
+    
     dl_fields = [
         np.zeros(total_cells),
         np.zeros(total_cells),
         np.zeros(total_cells),
     ]
-    print(dl_fields)
+    
     while dll.is_phy_signal():
         curr_seq_idx+=1
         
         fields = dll.recv()
         
         split_points = np.cumsum(num_cells_per_process)[:-1]
-        print(num_cells_per_process)
-        print(split_points)
+        
         # pid
         perproc0 = np.split(fields["Python-DL-FIELD-INPUT-0"], split_points)[0]
         perproc1 = np.split(fields["Python-DL-FIELD-INPUT-1"], split_points)[0]
         perproc2 = np.split(fields["Python-DL-FIELD-INPUT-2"], split_points)[0]
-        print(perproc0)
+        
         for pid in range(num_phy_procs):
             phy_fields[0][pid].append(perproc0)
             phy_fields[1][pid].append(perproc1)
@@ -161,7 +160,7 @@ def main():
             
             # Now flatten cubes and features per timestep to get shape (seq_len, num_cubes * features)
             #fields_data = fields_data.reshape(seq_len, -1)
-            print(fields_data.shape)
+
             # Convert to tensor
             inputs = torch.tensor(fields_data, dtype=torch.float32, device=device)
             inputs = inputs.reshape(*inputs.size()[:-3], -1) #seqlen, fields*numcubes, cubeD^3
@@ -174,7 +173,6 @@ def main():
                     batch_size=inputs.shape[1],
                     batch_first=False
                 )
-                print(predictions.shape, flush=True)
                 out = predictions[1].view(-1).detach().cpu().numpy()
                 out_reshaped = out.reshape(fields, num_cubes, cubeD, cubeD, cubeD)
 
@@ -193,17 +191,9 @@ def main():
         dll.send(dl_fields_send)
 
         #Reset data
-        phy_fields = [
-            [[] * num_phy_procs],
-            [[] * num_phy_procs],
-            [[] * num_phy_procs],
-        ]
-        total_cells = sum(num_cells_per_process)
-        dl_fields = [
-            np.zeros(total_cells),
-            np.zeros(total_cells),
-            np.zeros(total_cells),
-        ]
+        for field in range(field_count):
+            for pid in range(num_phy_procs):
+                phy_fields[field][pid].clear()
         curr_seq_idx = 0
 
     dll.finalize()

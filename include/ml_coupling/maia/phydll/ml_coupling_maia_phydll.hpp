@@ -44,6 +44,10 @@ protected:
     void preprocess_input();
     void inference();
     void postprocess_output();
+
+    std::vector<int> cubeOffsets;
+    std::vector<double> weight;
+    std::vector<std::vector<int>> cubeVolumeIndices; 
 };
 
 #endif // ML_COUPLING_MAIA_PHYDLL_HPP
