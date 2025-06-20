@@ -11,7 +11,6 @@
 #include <string>
 #include <algorithm>
 #include <fstream>
-#include "ml_coupling_strategy/aix/ml_coupling_strategy_aix.hpp"
 
 template <typename modelIn, typename modelOut>
 class MLCouplingMaia : public MLCoupling<std::vector<double*>, std::vector<double*>>{
@@ -29,6 +28,7 @@ public:
         const std::vector<int>& param_nOffsetCells,
         int param_nGhostLayers
     ){
+        // Setup in/output for CFD
         input_fields.clear();
         output_fields.clear();
         for(int i = 0; i < nFields; i++){
@@ -36,11 +36,12 @@ public:
             output_fields.push_back(output_fields_ptr[i]); 
         }
 
+        // Setup internal variables
         this->model_path = param_model_path;
-
         this->nCells = param_nCells;
+
         fullFieldCells = std::accumulate(this->nCells.begin(), this->nCells.end(), 1, std::multiplies());
-        
+
         this->nOffsetCells = param_nOffsetCells;
         this->nGhostLayers = param_nGhostLayers;
 
@@ -74,7 +75,7 @@ public:
         }else{
             inference();
             postprocess_output();
-            exportCubesToCSV("cubes.csv");
+            //exportCubesToCSV("cubes.csv");
             iter = 0;
         }   
     }
@@ -153,14 +154,13 @@ inline MLCouplingMaia<modelIn, modelOut>::~MLCouplingMaia() {
 }
 
 
+/** extract_cubes
+ * @param data pointer to flat double data
+ * @return 
+ */
 template <typename modelIn, typename modelOut>
 inline std::vector<std::vector<double>> MLCouplingMaia<modelIn, modelOut>::extract_cubes(const double* data){
     std::vector<std::vector<double>> cubes;
-
-    // add origin cube like Python 
-    /*zs.insert(zs.begin(), 0);
-    ys.insert(ys.begin(), 0);
-    xs.insert(xs.begin(), 0);*/
 
     for (int z0 : zs) {
         for (int y0 : ys) {
@@ -183,6 +183,9 @@ inline std::vector<std::vector<double>> MLCouplingMaia<modelIn, modelOut>::extra
     return cubes;
 }
 
+/**
+ * helper function to calculate linspace like numpy
+ */
 template <typename modelIn, typename modelOut>
 inline std::vector<int> MLCouplingMaia<modelIn, modelOut>::linspace(int start, int end, int count) {
     std::vector<int> result(count);
@@ -193,6 +196,9 @@ inline std::vector<int> MLCouplingMaia<modelIn, modelOut>::linspace(int start, i
     return result;
 }
 
+/**
+ * Debug function to write cube data to csv
+ */
 template <typename modelIn, typename modelOut>
 inline void MLCouplingMaia<modelIn, modelOut>::exportCubesToCSV(const std::string& filename) {
     // Sanity checks

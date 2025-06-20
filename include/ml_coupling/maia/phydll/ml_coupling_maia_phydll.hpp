@@ -16,9 +16,7 @@
 #include <fstream>
 #include <sstream>
 
-
-
-class MLCouplingMaiaPhyDLL : public MLCouplingMaia<std::vector<std::vector<std::vector<double>>>, std::vector<std::vector<double>>>{
+class MLCouplingMaiaPhyDLL : public MLCouplingMaia<std::vector<std::vector<std::vector<double>>>, double*>{
 public:
     MLCouplingMaiaPhyDLL();
     virtual ~MLCouplingMaiaPhyDLL();
@@ -46,6 +44,18 @@ protected:
     void preprocess_input();
     void inference();
     void postprocess_output();
+
+    std::vector<int64_t> outputShape;
+    
+    int yzStride;
+    int rowStride;
+    
+    std::vector<int> cubeBaseOffsets;      // for each cube extraction, the base offset in the full field
+    std::vector<int> cubeOffsets;  // relative offsets within a cube
+    std::vector<double> weight;
+
+    std::vector<int> cubeSrcBases;
+    std::vector<int> cubeDestBases;
 };
 
 #endif // ML_COUPLING_MAIA_PHYDLL_HPP

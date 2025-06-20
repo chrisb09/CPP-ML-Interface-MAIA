@@ -15,12 +15,8 @@
 #include <fstream>
 #include <sstream>
 #include <cassert>
-//#include "aixeleratorService/aixeleratorService.h"
-/*template <typename T>
-class AIxeleratorService;*/
 
-
-class MLCouplingMaiaAix : public MLCouplingMaia<std::vector<std::vector<std::vector<double>>>, std::vector<std::vector<std::vector<double>>>>{
+class MLCouplingMaiaAix : public MLCouplingMaia<float*, float*>{
 public:
     MLCouplingMaiaAix();
     virtual ~MLCouplingMaiaAix();
@@ -42,7 +38,7 @@ public:
 
 protected:
     //Strategy Object
-    MLCouplingStrategyAix<double, double>* couplingStrategy;
+    MLCouplingStrategyAix<float, float>* couplingStrategy;
 
     //Internal ML pipeline steps
     void preprocess_input();
@@ -53,10 +49,15 @@ protected:
     std::vector<int64_t> outputShape;
     int batchSize;
 
-    double* flatArray;
-    double* flatArrayOut;
+    int yzStride;
+    int rowStride;
+    
+    std::vector<int> cubeBaseOffsets;      // for each cube extraction, the base offset in the full field
+    std::vector<int> cubeOffsets;  // relative offsets within a cube
+    std::vector<double> weight;
 
-    /*AIxeleratorService<std::vector<std::vector<std::vector<double>>>>* aixelerator;*/
+    std::vector<int> cubeSrcBases;
+    std::vector<int> cubeDestBases;
 };
 
 

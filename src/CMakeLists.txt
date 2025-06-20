@@ -11,7 +11,6 @@ if(WITH_AIX)
         mlCouplingLib 
             PUBLIC 
                 ${CMAKE_CURRENT_SOURCE_DIR}/ml_coupling/maia/aix/ml_coupling_maia_aix.cpp
-                ml_coupling_strategy/aix/ml_coupling_strategy_aix.cpp
     )
     target_link_libraries(
         mlCouplingLib
@@ -24,7 +23,6 @@ if(WITH_PHYDLL)
         mlCouplingLib 
             PUBLIC 
                 ${CMAKE_CURRENT_SOURCE_DIR}/ml_coupling/maia/phydll/ml_coupling_maia_phydll.cpp
-                ml_coupling_strategy/phydll/ml_coupling_strategy_phydll.cpp
     )
     target_link_libraries(
         mlCouplingLib

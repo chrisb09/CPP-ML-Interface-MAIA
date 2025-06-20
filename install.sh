@@ -14,10 +14,20 @@ else
     echo "Error: readlink is not available on your system. Make sure it is installed!"
 fi
 
-source $CPP_ML_ROOT/extern/python/venv/bin/activate
+# Install Python
+if [ ! -d "${CPP_ML_ROOT}/extern/python/venv" ]; then
+    source ${CPP_ML_ROOT}/extern/python/install_venv.sh
+else
+    source $CPP_ML_ROOT/extern/python/venv/bin/activate
+fi
 
 ## install PhyDLL
 if [ ! -f "${CPP_ML_ROOT}/extern/phydll/BUILD/lib/libphydll.so" ]; then
+    if [ ! -d "${CPP_ML_ROOT}/extern/phydll" ]; then
+        git submodule init
+        git submodule update
+    fi
+
     echo "PhyDLL not found! Installing..."
 
     cd ${CPP_ML_ROOT}/extern/phydll
@@ -43,6 +53,11 @@ fi
 
 ## install AIxeleratorService
 if [ ! -f "${CPP_ML_ROOT}/extern/aixeleratorservice/BUILD/lib/libAIxeleratorService.so" ]; then
+    if [ ! -d "${CPP_ML_ROOT}/extern/aixeleratorservice" ]; then
+        git submodule init
+        git submodule update
+    fi
+
     echo "AIxeleratorService not found! Installing..."
 
     cd ${CPP_ML_ROOT}/extern/aixeleratorservice/
@@ -62,7 +77,7 @@ if [ ! -f "${CPP_ML_ROOT}/BUILD/lib/libmlCoupling.so" ]; then
     cd ${CPP_ML_ROOT}
     mkdir -p BUILD
     cd BUILD
-    cmake .. -DWITH_PHYDLL=ON -DCMAKE_INSTALL_PREFIX=./ -DWITH_AIX=ON #-DWITH_NCSA=ON 
+    cmake .. -DWITH_PHYDLL=OFF -DCMAKE_INSTALL_PREFIX=./ -DWITH_AIX=ON #-DWITH_NCSA=ON 
     cmake --build . -j && cmake --install .
 
     echo "CPP-ML-Interface installation finished!"
@@ -72,15 +87,3 @@ fi
 
 export LD_LIBRARY_PATH=${CPP_ML_ROOT}/extern/phydll/BUILD/lib:${LD_LIBRARY_PATH}
 export LD_LIBRARY_PATH=${CPP_ML_ROOT}/extern/aixeleratorservice/BUILD/lib:${LD_LIBRARY_PATH}
-
-#export PYTHONPATH=$PYTHONPATH:/home/cb292517/MA/maia_n_py_via_phydll/phydll/phydll/BUILD/src/python
-#export PYTHONPATH=$PYTHONPATH:/work/thes1961/ai4hpc
-#export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/cvmfs/software.hpc.rwth.de/Linux/RH8/x86_64/intel/sapphirerapids/software/Python/3.10.4-GCCcore-11.3.0/lib
-
-
-# setup LD_LIBRARY_PATH to find all installed libaries
-# PhyDLL
-#export PYTHONPATH=${PYTHONPATH}:${FORTRAN_ML_ROOT}/extern/phydll/BUILD/src/python:${FORTRAN_ML_ROOT}/model/
-## TensorFlow
-#export LD_LIBRARY_PATH=${FORTRAN_ML_ROOT}/extern/tensorflow/lib:${LD_LIBRARY_PATH}
-

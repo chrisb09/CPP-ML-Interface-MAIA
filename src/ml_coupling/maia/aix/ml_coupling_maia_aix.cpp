@@ -13,7 +13,6 @@
 #include <fstream>
 #include <sstream>
 #include <cassert>
-/*#include "aixeleratorService/aixeleratorService.h"*/
 
 // Constructor and destructor
 MLCouplingMaiaAix::MLCouplingMaiaAix() = default;
@@ -23,7 +22,7 @@ MLCouplingMaiaAix::~MLCouplingMaiaAix() {
 }
 
 void MLCouplingMaiaAix::init() {
-    couplingStrategy = new MLCouplingStrategyAix<double, double>();
+    couplingStrategy = new MLCouplingStrategyAix<float, float>();
     couplingStrategy->init();
 }
 
@@ -37,244 +36,197 @@ void MLCouplingMaiaAix::setup(
 ){
     MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers);
 
+    // Precompute strides in the original (ghost-including) input.
+    yzStride = nCells[1] * nCells[2];
+    rowStride = nCells[2];
+
     // Durch scripting erwartet jetzt [batchdim = nfields*numCubes][seqlen = 5][cubeD^3 = 8^3 = 512]
     inputShape = {nFields * numCubes, sequenceLen, cubeD * cubeD * cubeD};
     // Output ist dann [batchdim = nFields*numCubes][forecastwindow = 2][cubeD^3 = 512]
     outputShape = {nFields * numCubes, 2, cubeD * cubeD * cubeD};
     batchSize = inputShape[0]; //Since batch first = True; = nFields * num_cubes
     
+    input_fields_pre = new float[totalElements];
+    output_fields_post = new float[outputShape[0] * outputShape[1] * outputShape[2]];
 
-    //IN
-    //size_t totalElements = nFields * numCubes * sequenceLen * cubeD * cubeD * cubeD;
-    flatArray = new double[totalElements];
-   /* size_t size = 0;
-    for (const auto& v2 : input_fields_pre) {
-        for (const auto& v1 : v2) {
-            size += v1.size();
-        }
-    }
-    // Allocate memory for flattened array
-    flatArray = new double[size];*/
-    
-    
-    //OUT
-    output_fields_post.resize(outputShape[0]);
-    for (size_t i = 0; i < outputShape[0]; ++i) {
-        output_fields_post[i].resize(outputShape[1]);
-        for (size_t j = 0; j < outputShape[1]; ++j) {
-            output_fields_post[i][j].resize(outputShape[2]);
-        }
-    }
-
-    size_t size = 0;
-    for (const auto& v2 : output_fields_post) {
-        for (const auto& v1 : v2) {
-            size += v1.size();
-        }
-    }
-    flatArrayOut = new double[size];
-    
     couplingStrategy->setup(
         model_path,
         inputShape,
-        flatArray,
+        input_fields_pre,
         outputShape,
-        flatArrayOut,
+        output_fields_post,
         batchSize,
         app_comm
     );
 
 
+    cubeSrcBases.resize(numCubes);
+    int idx = 0;
+    for (int z0 : zs) {
+        for (int y0 : ys) {
+            for (int x0 : xs) {
+                // For a cube starting at (x0, y0, z0) in the trimmed region,
+                // the corresponding global (input_fields) base offset is:
+                int base = ( (z0 + nGhostLayers) * yzStride ) +
+                           ( (y0 + nGhostLayers) * nCells[2] ) +
+                           ( x0 + nGhostLayers );
+                cubeSrcBases[idx++] = base;
+            }
+        }
+    }
+
+    cubeDestBases.resize(nFields * numCubes);
+    for (int f = 0; f < nFields; ++f) {
+        for (int c = 0; c < numCubes; ++c) {
+            int batch_index = f * numCubes + c;
+            cubeDestBases[batch_index] = batch_index * sequenceLen * cubeSize;
+        }
+    }
+
+    cubeOffsets.resize(cubeSize);
+    // Precompute relative offsets inside a cube.
+    int offsetIdx = 0;
+    for (int dz = 0; dz < cubeD; ++dz) {
+        for (int dy = 0; dy < cubeD; ++dy) {
+            for (int dx = 0; dx < cubeD; ++dx) {
+                // For an element at local coordinate (dz, dy, dx) in the cube,
+                // its offset in a full volume is:
+                cubeOffsets[offsetIdx++] = dz * yzStride + dy * nCells[2] + dx;
+            }
+        }
+    }
+
+    // Precompute base offsets for every cube extracted.
+    cubeBaseOffsets.resize(numCubes);
+    idx = 0;
+    for (int z0 : zs) {
+        for (int y0 : ys) {
+            for (int x0 : xs) {
+                // The cube's base is the (global) offset in the full volume for its (0,0,0) element.
+                // Add the ghost layer offset.
+                int base = (z0 + nGhostLayers) * yzStride 
+                        + (y0 + nGhostLayers) * nCells[2] 
+                        + (x0 + nGhostLayers);
+                cubeBaseOffsets[idx++] = base;
+            }
+        }
+    }
+    
+
+    // The geometry never changes, precompute the weight map only once and store it.
+     // cached weight map; computed only during first call.
+    if (weight.size() != static_cast<size_t>(fullFieldCells)) {
+        weight.assign(fullFieldCells, 0.0);
+        for (int base : cubeBaseOffsets) {
+            // Simply add one contribution per voxel in the cube.
+            for (int off : cubeOffsets) {
+                weight[base + off] += 1.0;
+            }
+        }
+    }
 }
 
 //In: [sequenceLen][field][num_cubes * cubeD³]
-//Out: [batchdim = nfields*numCubes][seqlen = 5][cubeD^3 = 8^3 = 512]
+//Out: [batchdim = nfields*numCubes][seqlen = 5][cubeD^3 = 8^3 = 512] flat
 void MLCouplingMaiaAix::preprocess_input(){
-    // Desired batch dimension = nFields * numCubes.
-    int requiredBatch = nFields * numCubes;
-    
-    // Instead of having the outer vector sized by the sequence (time), we now want it sized by batch.
-    if (input_fields_pre.size() != static_cast<size_t>(requiredBatch)) {
-        input_fields_pre.clear();
-        input_fields_pre.resize(requiredBatch);
-        // Note: The inner vectors (the time series for each batch element) will be built incrementally.
-    }
-    
-    // Process each field separately.
+    // Loop over each field.
+    std::cout << "test -2" << std::endl;
     for (int f = 0; f < nFields; ++f) {
-        std::vector<double> trimmed_data;
-        trimmed_data.reserve(activeFieldCells);
-        // Same as before: extract the “trimmed” data for field f.
-        for (int z = nGhostLayers; z < nCells[0] - nGhostLayers; ++z) {
-            for (int y = nGhostLayers; y < nCells[1] - nGhostLayers; ++y) {
-                for (int x = nGhostLayers; x < nCells[2] - nGhostLayers; ++x) {
-                    int idx = (z * nCells[1] * nCells[2]) + (y * nCells[2]) + x;
-                    trimmed_data.push_back(input_fields[f][idx]);
+        // Pointer to this field's input volume.
+        const double* srcField = input_fields[f];
+        for (int c = 0; c < numCubes; ++c) {
+            int batch_index = f * numCubes + c;
+            // Compute destination offset for the current time step:
+            int destOffset = cubeDestBases[batch_index] + iter * cubeSize;
+            float* destPtr = input_fields_pre + destOffset;
+
+            // The top–left–front element of the cube in the input volume:
+            int srcBase = cubeSrcBases[c];
+
+            // For each layer (dz) and each row (dy) within the cube, copy cubeD elements.
+            // Destination cube is stored contiguously with row stride = cubeD and plane stride = cubeD * cubeD.
+            for (int dz = 0; dz < cubeD; ++dz) {
+                // Compute the offset for the current cube layer in input.
+                int srcLayerOffset = srcBase + dz * yzStride;
+                // Compute the offset for the current cube layer in the flat destination:
+                int destLayerOffset = dz * (cubeD * cubeD);
+                for (int dy = 0; dy < cubeD; ++dy) {
+                    int srcRowOffset = srcLayerOffset + dy * rowStride;
+                    int destRowOffset = destLayerOffset + dy * cubeD;
+                    // Copy a contiguous row of cubeD doubles.
+                    //std::memcpy(destPtr + destRowOffset,
+                    //              srcField + srcRowOffset,
+                    //              cubeD * sizeof(double));
+
+                    // Copy each element with conversion from double to float.
+                    for (int i = 0; i < cubeD; ++i) {
+                        destPtr[destRowOffset + i] = static_cast<float>(srcField[srcRowOffset + i]);
+                    }
                 }
             }
         }
-        
-        // Extract cubes from the trimmed data.
-        // Here, extract_cubes returns a vector of cubes for the given field.
-        // Each cube is a vector<double> of length cubeD*cubeD*cubeD.
-        std::vector<std::vector<double>> cubes = extract_cubes(trimmed_data.data());
-        
-        // ---------------------------
-        // 1) Save these per-field cube arrays so that later we can compare:
-        m_preFieldCubes = cubes; 
-        // Optional: Check that the number of cubes is as expected.
-        assert(cubes.size() == static_cast<size_t>(numCubes));
-        
-        // Now, instead of storing the cubes under the time step index,
-        // we place each cube into its proper "batch" slot.
-        // The batch index for field f and cube cube_idx is: f * numCubes + cube_idx.
-        for (size_t cube_idx = 0; cube_idx < cubes.size(); ++cube_idx) {
-            int batch_index = f * numCubes + static_cast<int>(cube_idx);
-            // Instead of overwriting an entire vector (as before) we push_back a new time step.
-            // Each call to preprocess_input adds one new time step for each batch element.
-            input_fields_pre[batch_index].push_back(std::move(cubes[cube_idx]));
-        }
     }
-
-    // Fill the flat array with values from the 3D input_fields_pretor
-    size_t index = 0;
-    for (const auto& v2 : input_fields_pre) {
-        for (const auto& v1 : v2) {
-            for (double value : v1) {
-                flatArray[index++] = value;
-            }
-        }
-    }
+    std::cout << "test -1" << std::endl;
 }
 
-
-//In: [batchdim = nfields*numCubes][seqlen = 5][cubeD^3 = 8^3 = 512]
-//Out: [batchdim = nFields*numCubes][forecastwindow = 2][cubeD^3 = 512]
+//In: [batchdim = nfields*numCubes][seqlen = 5][cubeD^3 = 8^3 = 512] flat
+//Out: [batchdim = nFields*numCubes][forecastwindow = 2][cubeD^3 = 512] flat
 void MLCouplingMaiaAix::inference(){
     couplingStrategy->inference();
 }
 
-//In: [batchdim = nFields*numCubes][forecastwindow = 2][cubeD^3 = 512]
+//In: [batchdim = nFields*numCubes][forecastwindow = 2][cubeD^3 = 512] flat
 //Out: [forecastwindow][field][num_cubes * cubeD³]
-void MLCouplingMaiaAix::postprocess_output(){
-    
-    size_t index = 0;
-    for (size_t i = 0; i < outputShape[0]; ++i) {
-        for (size_t j = 0; j < outputShape[1]; ++j) {
-            for (size_t k = 0; k < outputShape[2]; ++k) {
-                output_fields_post[i][j][k] = flatArrayOut[index++];
-            }
-        }
-    }
-    // For clarity, assume:
-    //   - forecastWindow is a member variable (e.g., forecastWindow == 2)
-    //   - cubeSize = cubeD³
-    //   - nFields, numCubes, nCells, nGhostLayers, fullFieldCells, xs, ys, zs, cubeD are known members.
-    const int forecastWindow = 2;  
-
-    // -----------------------------------------------------------------------------------
-    // STEP 1: Regroup the network output for each field.
-    // For each field, we need to collect its numCubes cubes.
-    // The batch dimension is arranged as:
-    //   batch_index = f * numCubes + cube_idx
-    // And each batch element contains forecastWindow time steps; we take the last one.
-    std::vector<std::vector<double>> field_cubes(nFields);
+void MLCouplingMaiaAix::postprocess_output(){    
+    std::cout << "test 1" << std::endl;
+    // If output_fields[f] is a vector containing the full volume for field f, clear it.
     for (int f = 0; f < nFields; ++f) {
-        // Allocate storage for all cubes of field f.
-        field_cubes[f].resize(numCubes * cubeSize);
-        for (int cube = 0; cube < numCubes; ++cube) {
-            int batch_index = f * numCubes + cube;
-            // Get the predicted cube from the last forecast time step.
-            const std::vector<double>& predCube = output_fields_post[batch_index][forecastWindow - 1];
-            // Copy the cube data into the proper offset.
-            for (int i = 0; i < cubeSize; ++i) {
-                field_cubes[f][static_cast<int>(cube) * cubeSize + i] = predCube[i];
-            }
-        }
-    }
-    // Save these per-field cube arrays (for later comparison, if needed).
-    m_postFieldCubes = field_cubes;
-
-    // -----------------------------------------------------------------------------------
-    // STEP 2: Compute the weight map for contributions.
-    // Create a weight vector to count how many cubes contribute to each voxel.
-    std::vector<double> weight(fullFieldCells, 0.0);
-    for (int z0 : zs) {
-        for (int y0 : ys) {
-            for (int x0 : xs) {
-                for (int dz = 0; dz < cubeD; ++dz) {
-                    for (int dy = 0; dy < cubeD; ++dy) {
-                        for (int dx = 0; dx < cubeD; ++dx) {
-                            int global_x = x0 + dx + nGhostLayers;
-                            int global_y = y0 + dy + nGhostLayers;
-                            int global_z = z0 + dz + nGhostLayers;
-                            if (global_x < nCells[2] && global_y < nCells[1] && global_z < nCells[0]) {
-                                int vol_index = global_z * (nCells[1] * nCells[2])
-                                              + global_y * nCells[2] + global_x;
-                                weight[vol_index] += 1.0;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // -----------------------------------------------------------------------------------
-    // STEP 3: Clear the output full volumes.
-    // output_fields holds three full volumes (one per field); set the inner voxels to 0.
-    for (int f = 0; f < nFields; ++f) {
+        // Only clear the interior region (leave ghost layers unchanged if needed)
         for (int z = nGhostLayers; z < nCells[0] - nGhostLayers; ++z) {
+            int base_z = z * yzStride;
             for (int y = nGhostLayers; y < nCells[1] - nGhostLayers; ++y) {
-                for (int x = nGhostLayers; x < nCells[2] - nGhostLayers; ++x) {
-                    int full_idx = z * (nCells[1] * nCells[2]) + y * nCells[2] + x;
-                    output_fields[f][full_idx] = 0;
-                }
+                int start = base_z + y * rowStride + nGhostLayers;
+                std::fill(output_fields[f] + start,
+                          output_fields[f] + start + nActiveCells[2],
+                          0.0);
             }
         }
     }
-
-    // -----------------------------------------------------------------------------------
-    // STEP 4: Reconstruct the full volumes from the field cubes.
-    // For each field, loop over the cube starting positions (ordered as in extraction)
-    // and add in the cube’s contributions to the full volume.
+    std::cout << "test 2" << std::endl;
+    
+    // Reconstruct the full volumes directly from the flat output array.
+    // The flat array 'output_fields_post' has the layout:
+    //    [batch dimension: (f * numCubes + cube)][time: FORECAST_WINDOW][cubeSize]
+    // For each field and each cube, we need the predicted cube from time step FORECAST_WINDOW–1.
+    // Since shape is fixed, we can compute offsets directly.
     for (int f = 0; f < nFields; ++f) {
-        int cubeIndex = 0;
-        for (int z0 : zs) {
-            for (int y0 : ys) {
-                for (int x0 : xs) {
-                    // For each extracted cube starting position, add its contribution.
-                    for (int dz = 0; dz < cubeD; ++dz) {
-                        for (int dy = 0; dy < cubeD; ++dy) {
-                            for (int dx = 0; dx < cubeD; ++dx) {
-                                int global_x = x0 + dx + nGhostLayers;
-                                int global_y = y0 + dy + nGhostLayers;
-                                int global_z = z0 + dz + nGhostLayers;
-                                if (global_x < nCells[2] && global_y < nCells[1] && global_z < nCells[0]) {
-                                    int vol_index = global_z * (nCells[1] * nCells[2])
-                                                  + global_y * nCells[2] + global_x;
-                                    int cube_offset = dz * cubeD * cubeD + dy * cubeD + dx;
-                                    output_fields[f][vol_index] += 
-                                        field_cubes[f][cubeIndex * cubeSize + cube_offset];
-                                }
-                            }
-                        }
-                    }
-                    ++cubeIndex;
-                }
+        // "cubeCounter" indexes the cube for a given field.
+        int cubeCounter = 0;
+        for (int base : cubeBaseOffsets) {
+            // The global batch index is f * numCubes + cubeCounter.
+            int batch_index = f * numCubes + cubeCounter;
+            // Each batch element has FORECAST_WINDOW time steps.
+            // The predicted cube is located at time step FORECAST_WINDOW - 1.
+            // Therefore, its starting offset in output_fields_post is:
+            int src_offset = ((batch_index * 2) + (2 - 1)) * cubeSize;
+            // Instead of copying cube data into an intermediate vector, add its contribution directly.
+            // Pointer arithmetic makes inner loops efficient.
+            const float* cubeData = &output_fields_post[src_offset];
+            double* fullField   = output_fields[f];
+            for (int i = 0; i < cubeSize; ++i) {
+                fullField[base + cubeOffsets[i]] += static_cast<double>(cubeData[i]);
             }
+            ++cubeCounter;
         }
-        // Normalize each voxel by the number of contributions.
+    std::cout << "test 3" << std::endl;
+
+        // Normalize the reconstructed full volume using the precomputed weight map.
         for (int i = 0; i < fullFieldCells; ++i) {
-            if (weight[i] > 0.0) {
+            // Only divide when there is a contribution.
+            if (weight[i] > 0.0)
                 output_fields[f][i] /= weight[i];
-            }
         }
     }
-
-    //Empty buffers
-    input_fields_pre.clear();
-    output_fields_post.clear();
 }
 
 MPI_Comm MLCouplingMaiaAix::getComm(){
@@ -287,4 +239,9 @@ void MLCouplingMaiaAix::finalize() {
         delete couplingStrategy;
         couplingStrategy = nullptr;
     }
+    // Free the allocated arrays.
+    delete[] input_fields_pre;
+    input_fields_pre = nullptr;
+    delete[] output_fields_post;
+    output_fields_post = nullptr;
 }

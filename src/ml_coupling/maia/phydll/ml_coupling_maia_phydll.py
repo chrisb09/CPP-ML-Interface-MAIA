@@ -93,8 +93,6 @@ def main():
         print(f"PHYDLL: caught error when loading model: {e}")
 
     model.to(device)
-    torch.set_float32_matmul_precision('high')
-    #model = torch.compile(model)
     model.eval()
 
     ##################
@@ -137,10 +135,6 @@ def main():
         if curr_seq_idx < sequence_len:
             continue 
 
-        #Split data per process
-        """split_points = np.cumsum(num_cells_per_process)[:-1]
-        per_proc_flat_data = np.split(phy_fields, split_points)"""
-
         #Reshape each chunk into [sequenceLen, vectorLen]
         curr_pos = 0 #Increases by num_cells_per_process[pid] // seqlen
         nFields = 3
@@ -148,69 +142,6 @@ def main():
         #for pid, flat in enumerate(per_proc_flat_data):
         for pid in range(num_phy_procs):
             vectorLen = num_cells_per_process[pid]
-            """reshaped = flat.reshape(sequence_len, vectorLen)
-
-            inputs = torch.tensor(reshaped, dtype=torch.float32, device=device)
-            inputs = inputs.reshape(sequence_len, int(vectorLen / (cubeD**3)), cubeD, cubeD, cubeD)
-            inputs = inputs.reshape(*inputs.size()[:-3], -1)
-
-            input_cubes = inputs.permute(1, 0, 2)  # shape: [num_cubes, sequence_len, cube_features]
-            input_cubes_flat = input_cubes.reshape(input_cubes.shape[0], -1).cpu().numpy()"""
-
-            """arr = np.asarray(flat, dtype=np.float32).reshape(sequence_len, vectorLen)
-
-            # total_per_timestep = num_cubes * nFields * cubeSize
-            total_per_timestep = arr.shape[1]
-            # deduce how many cubes for this process:
-            num_cubes = total_per_timestep // (nFields * cubeSize)
-
-            # We'll build an array [seq_len, num_cubes, nFields, cubeSize]
-            cubes_4d = np.zeros((sequence_len, num_cubes, nFields, cubeSize), dtype=np.float32)
-
-            # Demultiplex: each time step t, each cube i, each field f
-            for t in range(sequence_len):
-                row_data = arr[t]  # shape [num_cubes * nFields * cubeSize]
-                for i in range(num_cubes):
-                    base_cube = i * nFields * cubeSize
-                    for f in range(nFields):
-                        offset = base_cube + f*cubeSize
-                        cubes_4d[t, i, f, :] = row_data[offset : offset + cubeSize]
-
-            # Reshape the last dim to (cubeD,cubeD,cubeD) => [seq_len, num_cubes, nFields, cubeD, cubeD, cubeD]
-            cubes_5d = cubes_4d.reshape(sequence_len, num_cubes, nFields, cubeD, cubeD, cubeD)
-            #[5, num_cubes, 3, a, a, a]
-            # If your model wants shape [sequence_len, batch_size, nFields*cubeSize], do:
-            # => [5, num_cubes, 3*cubeD^3]
-            inputs = torch.tensor(cubes_5d, dtype=torch.float32, device=device)
-            #inputs = inputs.view(sequence_len, num_cubes, nFields*cubeSize)
-            print(inputs.shape)#torch.Size([5, 690, 1536])
-            inputs = inputs.reshape(sequence_len,num_cubes*nFields,cubeD,cubeD,cubeD)
-            inputs = inputs.reshape(*inputs.size()[:-3], -1)#.to(device)
-            print(inputs.shape)"""
-            # Check for duplicate input cubes (optional). 
-            # We'll flatten each cube to 1D, ignoring time dimension => shape [num_cubes, (sequence_len * nFields*cubeSize)]
-            """cubes_for_dup = inputs.permute(1,0,2).reshape(num_cubes, -1).cpu().numpy()
-            duplicate_input_indices = []
-            for i in range(num_cubes):
-                for j in range(i + 1, num_cubes):
-                    if np.allclose(cubes_for_dup[i], cubes_for_dup[j]):
-                        duplicate_input_indices.append((i, j))
-
-            if duplicate_input_indices:
-                print(f"[Rank {lrank}] (PID={pid}) Found duplicate input cubes at indices: {duplicate_input_indices}")"""
-            #cubes_per_process[pid][seq_idx][fields]
-            """for field in range(field_count):
-                print(phy_fields[field][pid],flush=True)
-                data = np.array(phy_fields[field][pid])
-                print(data.shape, flush=True)
-                data = data.reshape(sequence_len, (vectorLen//cubeSize), cubeD, cubeD, cubeD)
-                print(data.shape, flush=True)
-                inputs = torch.tensor(data, dtype=torch.float32, device=device)
-                print(inputs.shape, flush=True)
-                inputs = inputs.reshape(*inputs.size()[:-3], -1)
-                print(inputs.shape, flush=True)
-                # Run model inference
-                #Input is [sequence_len, num_cubes * cubeD * cubeD * cubeD]"""
             
             fields_data = []
             for field in range(field_count):
@@ -252,24 +183,8 @@ def main():
                 for field in range(fields):
                     field_data = out_reshaped[field].reshape(-1)
                     dl_fields[field][curr_pos:curr_pos+vectorLen] = field_data
-                    #print(dl_fields[field], flush=True)
-                    #print(dl_fields[field].shape)
-                    #print(curr_pos)
-                    #print(vectorLen, flush=True)
-                    #dl_fields[field][curr_pos:curr_pos+vectorLen] = out
             curr_pos = curr_pos + vectorLen    
 
-            """pred_cubes = predictions[1].permute(1, 0, 2)  # shape: [num_cubes, forecast_window, features]
-                pred_cubes_flat = pred_cubes.reshape(pred_cubes.shape[0], -1).cpu().numpy()
-
-                duplicate_pred_indices = []
-                for i in range(len(pred_cubes_flat)):
-                    for j in range(i + 1, len(pred_cubes_flat)):
-                        if np.allclose(pred_cubes_flat[i], pred_cubes_flat[j]):
-                            duplicate_pred_indices.append((i, j))
-
-                if duplicate_pred_indices:
-                    print(f"[Rank {lrank}] Found duplicate predicted cubes at indices: {duplicate_pred_indices}")"""
         dl_fields_send = {
             "Python-DL-FIELD-OUTPUT-0": dl_fields[0],
             "Python-DL-FIELD-OUTPUT-1": dl_fields[1],

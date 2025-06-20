@@ -1,15 +1,11 @@
 #pragma once
 
-#include "mpi.h"
-
 template <typename In, typename Out>
 class MLCouplingStrategy{
 public:
     virtual ~MLCouplingStrategy() = default;
 
     virtual void init() = 0;
-
-    //virtual void setup() = 0;
 
     virtual void inference() = 0;
 

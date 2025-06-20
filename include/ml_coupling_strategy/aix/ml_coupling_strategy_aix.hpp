@@ -2,16 +2,12 @@
 #define ML_COUPLING_STRATEGY_AIX_HPP
 
 #include "ml_coupling_strategy/ml_coupling_strategy.hpp"  // Your base strategy header
-//#include "ml_coupling_strategy/aix/ml_coupling_strategy_aix.hpp"
 #include <vector>
 #include <string>
 #include <iostream>
 #include <stdexcept>
 #include <mpi.h>
 #include "aixeleratorService/aixeleratorService.h"
-// Forward declaration for the external templated class.
-/*template <typename T>
-class AIxeleratorService;*/
 
 template <typename In, typename Out>
 class MLCouplingStrategyAix : public MLCouplingStrategy<In, Out>{
@@ -29,8 +25,7 @@ public:
         In* output_fields_ptr,
         int batch_size, 
         MPI_Comm comm
-       /* AIxeleratorService<In>* param_aixelerator*/
-    ) /*override*/;
+    );
 
     void inference();
 
@@ -65,7 +60,6 @@ inline void MLCouplingStrategyAix<In, Out>::setup(
     In* output_fields_ptr,
     int batch_size, 
     MPI_Comm comm
-    /*AIxeleratorService<In>* param_aixelerator*/
 ) {
     this->aixelerator = new AIxeleratorService<In>(
         model_path, 
@@ -75,7 +69,7 @@ inline void MLCouplingStrategyAix<In, Out>::setup(
         output_fields_ptr,
         batch_size, 
         comm
-    );/*param_aixelerator;*/
+    );
 }
 
 template <typename In, typename Out>

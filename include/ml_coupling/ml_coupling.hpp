@@ -1,9 +1,9 @@
 #pragma once
 
-#include "ml_coupling_strategy/ml_coupling_strategy.hpp" 
-#include <mpi.h>
-#include <vector>
-#include <string>
+//#include "ml_coupling_strategy/ml_coupling_strategy.hpp" 
+//#include <mpi.h>
+//#include <vector>
+//#include <string>
 
 template<typename In, typename Out>
 class MLCoupling {
