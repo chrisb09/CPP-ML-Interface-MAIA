@@ -32,10 +32,16 @@ void MLCouplingMaiaPhyDLL::setup(
     const std::string& param_model_path,
     const std::vector<int>& param_nCells,
     const std::vector<int>& param_nOffsetCells,
-    int param_nGhostLayers
+    int param_nGhostLayers,
+    int param_start,
+    int param_sequenceLen,
+    int param_interval,
+    int param_increment,
+    int param_hdfOutputInterval
 ){
     // Setup internal base class variables
-    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers);
+    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval);
+
     // Setup PhyDLL comm
     couplingStrategy->setup(true, 1, 1, nFields, numCubes * cubeSize);
 

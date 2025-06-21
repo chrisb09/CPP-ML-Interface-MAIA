@@ -23,9 +23,14 @@ if(WITH_PHYDLL)
   set(PHYDLL_BUILD_DIR ${CMAKE_SOURCE_DIR}/extern/phydll/BUILD)
 endif()
 
+option(WITH_REFERENCE_MODEL "Enable REFERENCE_MODEL as inference strategy." OFF)
+if(WITH_REFERENCE_MODEL)
+  add_compile_options("-DWITH_REFERENCE_MODEL")
+endif()
 
-if(NOT ${WITH_AIX} AND NOT ${WITH_PHYDLL})
-  message(FATAL_ERROR "No inference strategy chosen! At least one inference strategy is required. Possible choices: WITH_AIX=ON or WITH_PHYDLL=ON")
+
+if(NOT ${WITH_AIX} AND NOT ${WITH_PHYDLL} AND NOT ${WITH_REFERENCE_MODEL})
+  message(FATAL_ERROR "No inference strategy chosen! At least one inference strategy is required. Possible choices: WITH_AIX=ON or WITH_PHYDLL=ON or WITH_REFERENCE_MODEL=ON")
 endif()
 
 find_package(MPI REQUIRED)

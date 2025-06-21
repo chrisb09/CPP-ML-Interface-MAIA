@@ -29,7 +29,12 @@ public:
         const std::string& param_model_path,
         const std::vector<int>& param_nCells,
         const std::vector<int>& param_nOffsetCells,
-        int param_nGhostLayers
+        int param_nGhostLayers,
+        int param_start,
+        int param_sequenceLen,
+        int param_interval,
+        int param_increment,
+        int param_hdfOutputInterval
     ) override;
 
     MPI_Comm getComm() override;

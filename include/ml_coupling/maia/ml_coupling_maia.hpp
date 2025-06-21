@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <fstream>
 
+#include <highfive/highfive.hpp>
+
 template <typename modelIn, typename modelOut>
 class MLCouplingMaia : public MLCoupling<std::vector<double*>, std::vector<double*>>{
 public:
@@ -26,7 +28,12 @@ public:
         const std::string& param_model_path,
         const std::vector<int>& param_nCells,
         const std::vector<int>& param_nOffsetCells,
-        int param_nGhostLayers
+        int param_nGhostLayers,        
+        int param_start,
+        int param_sequenceLen,
+        int param_interval,
+        int param_increment,
+        int param_hdfOutputInterval
     ){
         // Setup in/output for CFD
         input_fields.clear();
@@ -64,6 +71,17 @@ public:
 
         numCubes = zs.size() * ys.size() * xs.size();
         totalElements = sequenceLen * nFields * numCubes * cubeSize;
+
+        //Setup ML Metadata
+        inferenceStartStep = param_start;
+        inputSeqLen = param_sequenceLen;
+        inferenceInterval = param_interval;
+        inferenceIncrement = param_increment;
+        nextInferenceStep = param_start;
+        hdfOutputInterval = param_hdfOutputInterval;
+        if(param_start < (param_sequenceLen - 1)){
+            std::cerr << "m-AIA ERROR: inference start step cannot be smaller than input sequence length of the transformer model!" << "\n";
+        }
     }
     
     // The main ML step that processes a time step.
@@ -86,6 +104,15 @@ public:
     // Returns the MPI communicator from the underlying strategy.
     virtual MPI_Comm getComm() = 0;
 
+    int getNextInferenceStep();
+    void setNextInferenceStep(int nextGlobalInferenceStep, int nextInferStep);
+    int getInferenceIncrement();
+    int getInferenceInterval();
+    bool isCouplingStep(int step);
+    bool isInferenceStep(int step);
+    void writeUVWFieldsToH5(double* uField, double* vField, double* wField, std::vector<int> write_nCells, std::vector<int> write_nOffsetCells, std::string outputFile);
+
+    void calculateMetrics();
 protected:
     //Communication
     MPI_Comm app_comm = MPI_COMM_WORLD;
@@ -123,6 +150,14 @@ protected:
     int activeFieldCells; // Without ghostcells
 	int nGhostLayers;
 
+    //Maia ML data
+    int inferenceStartStep;
+    int inputSeqLen;
+    int inferenceInterval;
+    int inferenceIncrement;
+    int nextInferenceStep;
+    int hdfOutputInterval;
+
 
     //CSV dump data
     // Store the un-interleaved cubes from the preprocess step:
@@ -152,6 +187,46 @@ inline MLCouplingMaia<modelIn, modelOut>::MLCouplingMaia() = default;
 template <typename modelIn, typename modelOut>
 inline MLCouplingMaia<modelIn, modelOut>::~MLCouplingMaia() {
 }
+
+
+
+template <typename modelIn, typename modelOut>
+inline int MLCouplingMaia<modelIn, modelOut>::getNextInferenceStep(){
+  return nextInferenceStep;
+}
+
+template <typename modelIn, typename modelOut>
+inline void MLCouplingMaia<modelIn, modelOut>::setNextInferenceStep(int nextGlobalInferenceStep, int nextInferStep){
+  if (nextGlobalInferenceStep%hdfOutputInterval > 0 && nextGlobalInferenceStep%hdfOutputInterval < (hdfOutputInterval-inferenceIncrement)){ //Would it not skip the hdfOutputInterval?
+    nextInferenceStep = nextInferStep;
+  }else{
+    nextInferenceStep = nextInferStep + (hdfOutputInterval - ((nextGlobalInferenceStep - 1) % hdfOutputInterval));//Moves nextInfer to 1001 (in terms of global not logical)
+  }
+}
+
+template <typename modelIn, typename modelOut>
+inline int MLCouplingMaia<modelIn, modelOut>::getInferenceIncrement(){
+  return inferenceIncrement;
+}
+
+template <typename modelIn, typename modelOut>
+inline int MLCouplingMaia<modelIn, modelOut>::getInferenceInterval(){
+  return inferenceInterval;
+}
+
+template <typename modelIn, typename modelOut>
+inline bool MLCouplingMaia<modelIn, modelOut>::isCouplingStep(int step){
+  if((step >= (nextInferenceStep - (inputSeqLen - 1))) && (step <= nextInferenceStep)){
+    return true;
+  }
+  return false;
+}
+
+template <typename modelIn, typename modelOut>
+inline bool MLCouplingMaia<modelIn, modelOut>::isInferenceStep(int step){
+  return step == nextInferenceStep;
+}
+
 
 
 /** extract_cubes
@@ -286,5 +361,32 @@ inline void MLCouplingMaia<modelIn, modelOut>::exportCubesToCSV(const std::strin
     std::cout << "[exportCubesToCSV] Finished writing " << filename << "\n";
 }
 
+
+template <typename modelIn, typename modelOut>
+inline void MLCouplingMaia<modelIn, modelOut>::writeUVWFieldsToH5(double* uField, double* vField, double* wField, std::vector<int> write_nCells, std::vector<int> write_nOffsetCells, std::string outputFile) {
+  std::vector<size_t> dims{(size_t) write_nCells[0], (size_t) write_nCells[1], (size_t) write_nCells[2]};
+
+  HighFive::File output_file(outputFile, HighFive::File::Create|HighFive::File::Truncate);
+
+  HighFive::DataSet dataset_recv_u = output_file.createDataSet<double>("/flow/U", HighFive::DataSpace(dims));
+  HighFive::DataSet dataset_recv_v = output_file.createDataSet<double>("/flow/V", HighFive::DataSpace(dims));
+  HighFive::DataSet dataset_recv_w = output_file.createDataSet<double>("/flow/W", HighFive::DataSpace(dims));
+
+  HighFive::DataSet dataset_num_cells = output_file.createDataSet<int>("/flow/numCells", HighFive::DataSpace({3}));
+  HighFive::DataSet dataset_offsets = output_file.createDataSet<int>("/flow/offsets", HighFive::DataSpace({3}));
+
+  dataset_recv_u.write_raw((double***)uField);
+  dataset_recv_v.write_raw((double***)vField);    
+  dataset_recv_w.write_raw((double***)wField);  
+
+  dataset_num_cells.write((int*)write_nCells.data()); 
+  dataset_offsets.write((int*)write_nOffsetCells.data()); 
+}
+
+
+template <typename modelIn, typename modelOut>
+inline void MLCouplingMaia<modelIn, modelOut>::calculateMetrics(){
+
+}
 
 #endif // ML_COUPLING_MAIA_HPP

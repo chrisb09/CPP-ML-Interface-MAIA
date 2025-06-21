@@ -32,9 +32,14 @@ void MLCouplingMaiaAix::setup(
     const std::string& param_model_path,
     const std::vector<int>& param_nCells,
     const std::vector<int>& param_nOffsetCells,
-    int param_nGhostLayers
+    int param_nGhostLayers,
+    int param_start,
+    int param_sequenceLen,
+    int param_interval,
+    int param_increment,
+    int param_hdfOutputInterval
 ){
-    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers);
+    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval);
 
     // Precompute strides in the original (ghost-including) input.
     yzStride = nCells[1] * nCells[2];
@@ -130,7 +135,6 @@ void MLCouplingMaiaAix::setup(
 //Out: [batchdim = nfields*numCubes][seqlen = 5][cubeD^3 = 8^3 = 512] flat
 void MLCouplingMaiaAix::preprocess_input(){
     // Loop over each field.
-    std::cout << "test -2" << std::endl;
     for (int f = 0; f < nFields; ++f) {
         // Pointer to this field's input volume.
         const double* srcField = input_fields[f];
@@ -166,7 +170,6 @@ void MLCouplingMaiaAix::preprocess_input(){
             }
         }
     }
-    std::cout << "test -1" << std::endl;
 }
 
 //In: [batchdim = nfields*numCubes][seqlen = 5][cubeD^3 = 8^3 = 512] flat
@@ -177,8 +180,7 @@ void MLCouplingMaiaAix::inference(){
 
 //In: [batchdim = nFields*numCubes][forecastwindow = 2][cubeD^3 = 512] flat
 //Out: [forecastwindow][field][num_cubes * cubeD³]
-void MLCouplingMaiaAix::postprocess_output(){    
-    std::cout << "test 1" << std::endl;
+void MLCouplingMaiaAix::postprocess_output(){   
     // If output_fields[f] is a vector containing the full volume for field f, clear it.
     for (int f = 0; f < nFields; ++f) {
         // Only clear the interior region (leave ghost layers unchanged if needed)
@@ -192,7 +194,6 @@ void MLCouplingMaiaAix::postprocess_output(){
             }
         }
     }
-    std::cout << "test 2" << std::endl;
     
     // Reconstruct the full volumes directly from the flat output array.
     // The flat array 'output_fields_post' has the layout:
@@ -218,7 +219,6 @@ void MLCouplingMaiaAix::postprocess_output(){
             }
             ++cubeCounter;
         }
-    std::cout << "test 3" << std::endl;
 
         // Normalize the reconstructed full volume using the precomputed weight map.
         for (int i = 0; i < fullFieldCells; ++i) {

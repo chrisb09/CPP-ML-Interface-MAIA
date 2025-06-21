@@ -30,6 +30,13 @@ if(WITH_PHYDLL)
             ${PHYDLL_BUILD_DIR}/lib  
     )
 endif()
+if(WITH_REFERENCE_MODEL)
+    target_sources(
+        mlCouplingLib 
+            PUBLIC 
+                ${CMAKE_CURRENT_SOURCE_DIR}/ml_coupling/maia/ref/ml_coupling_maia_ref.cpp
+    )
+endif()
 
 if(WITH_AIX)
     target_include_directories(mlCouplingLib 
@@ -42,6 +49,15 @@ if(WITH_PHYDLL)
         PUBLIC ${PHYDLL_BUILD_DIR}/include
     )
 endif()
+
+target_link_libraries(
+    mlCouplingLib
+        PUBLIC 
+        ${PROJECT_SOURCE_DIR}/extern/HighFive/BUILD/INSTALL/lib  
+    )
+target_include_directories(mlCouplingLib 
+    PUBLIC ${PROJECT_SOURCE_DIR}/extern/HighFive/BUILD/INSTALL/include
+)
 # Make the appropriate header directories available to mlCouplingLib and its consumers.
 target_include_directories(mlCouplingLib
     PUBLIC

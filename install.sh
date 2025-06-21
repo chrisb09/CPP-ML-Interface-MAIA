@@ -70,6 +70,30 @@ else
     echo "AIxeleratorService installation found! Nothing to install."
 fi
 
+#Install HighFive
+if [ ! -d "${CPP_ML_ROOT}/extern/HighFive/BUILD" ]; then
+    if [ ! -d "${CPP_ML_ROOT}/extern/HighFive" ]; then
+        git submodule init
+        git submodule update
+    fi
+    echo "HighFive not found! Installing..."
+
+    cd ${CPP_ML_ROOT}/extern/HighFive 
+
+    HIGHFIVEROOT=${PWD}
+
+    rm -rf BUILD && mkdir BUILD && cd BUILD
+    rm -rf INSTALL && mkdir INSTALL
+
+    # unit tests require a submodule to be recursively cloned as well, so turn them off
+    cmake .. -DHIGHFIVE_UNIT_TESTS=OFF -DCMAKE_INSTALL_PREFIX=${HIGHFIVEROOT}/BUILD/INSTALL
+
+    cmake --build . -j 
+    cmake --install .
+else
+    echo "HighFive installation found! Nothing to install."
+fi
+
 # install CPP-ML-Interface
 if [ ! -f "${CPP_ML_ROOT}/BUILD/lib/libmlCoupling.so" ]; then
     echo "CPP-ML-Interface not found! Installing..."#
@@ -77,7 +101,7 @@ if [ ! -f "${CPP_ML_ROOT}/BUILD/lib/libmlCoupling.so" ]; then
     cd ${CPP_ML_ROOT}
     mkdir -p BUILD
     cd BUILD
-    cmake .. -DWITH_PHYDLL=ON -DCMAKE_INSTALL_PREFIX=./ -DWITH_AIX=ON #-DWITH_NCSA=ON 
+    cmake .. -DWITH_PHYDLL=ON -DCMAKE_INSTALL_PREFIX=./ -DWITH_AIX=ON -DWITH_REFERENCE_MODEL=ON
     cmake --build . -j && cmake --install .
 
     echo "CPP-ML-Interface installation finished!"
