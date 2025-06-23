@@ -10,13 +10,18 @@ import deepspeed
 import inspect
 import math
 import argparse
+import scorep
 
 import thoplw
 
-sys.path.insert(0, '../../../python_utils/')
-from TimerManager import TimerManager
-tm = TimerManager()
+current_dir = os.path.dirname(os.path.abspath(__file__))
+python_utils_path = os.path.abspath(os.path.join(current_dir, '../../../python_utils/'))
+if python_utils_path not in sys.path:
+    sys.path.insert(0, python_utils_path)
 
+from TimerManager import TimerManager
+
+tm = TimerManager()
 def main():
     tm.start("Init")
     ##################
@@ -206,7 +211,7 @@ def main():
             "Python-DL-FIELD-OUTPUT-2": dl_fields[2]
         }
         dll.send(dl_fields_send)
-            tm.stop("send")
+        tm.stop("send")
 
         #Reset data
         for field in range(field_count):

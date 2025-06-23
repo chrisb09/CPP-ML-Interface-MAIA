@@ -15,6 +15,14 @@
 
 #ifdef WITH_SCOREP
 #include <scorep/SCOREP_User.h>
+
+SCOREP_USER_REGION_DEFINE(initRegion);
+SCOREP_USER_REGION_DEFINE(setupRegion);
+SCOREP_USER_REGION_DEFINE(metaInfoComm);
+SCOREP_USER_REGION_DEFINE(preprocessRegion);
+SCOREP_USER_REGION_DEFINE(inferenceRegion);
+SCOREP_USER_REGION_DEFINE(postprocessRegion);
+SCOREP_USER_REGION_DEFINE(finalizeRegion);
 #endif
 
 
@@ -26,8 +34,7 @@ MLCouplingMaiaPhyDLL::~MLCouplingMaiaPhyDLL() {
 
 void MLCouplingMaiaPhyDLL::init() {
     #ifdef WITH_SCOREP
-        SCOREP_USER_REGION_DEFINE(initRegion);
-        SCOREP_USER_REGION_BEGIN(initRegion, "init", SCOREP_USER_REGION_TYPE_FUNCTION);
+        SCOREP_USER_REGION_BEGIN(initRegion, "MLCouplingMaiaPhyDLL::init", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
     couplingStrategy = new MLCouplingStrategyPhyDLL<std::vector<std::vector<std::vector<double>>>, std::vector<std::vector<double>>>();
@@ -53,8 +60,7 @@ void MLCouplingMaiaPhyDLL::setup(
     int param_hdfOutputInterval
 ){
     #ifdef WITH_SCOREP
-        SCOREP_USER_REGION_DEFINE(setupRegion);
-        SCOREP_USER_REGION_BEGIN(setupRegion, "setup", SCOREP_USER_REGION_TYPE_FUNCTION);
+        SCOREP_USER_REGION_BEGIN(setupRegion, "MLCouplingMaiaPhyDLL::setup", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
     // Setup internal base class variables
@@ -64,8 +70,7 @@ void MLCouplingMaiaPhyDLL::setup(
     couplingStrategy->setup(true, 1, 1, nFields, numCubes * cubeSize);
 
     #ifdef WITH_SCOREP
-        SCOREP_USER_REGION_DEFINE(metaInfoComm);
-        SCOREP_USER_REGION_BEGIN(metaInfoComm, "MetaInfoComm", SCOREP_USER_REGION_TYPE_CODE);
+        SCOREP_USER_REGION_BEGIN(metaInfoComm, "MLCouplingMaiaPhyDLL::MetaInfoComm", SCOREP_USER_REGION_TYPE_COMMON);
     #endif
    
     // Meta Info communication
@@ -175,8 +180,7 @@ MPI_Comm MLCouplingMaiaPhyDLL::getComm() {
  */
 void MLCouplingMaiaPhyDLL::preprocess_input(){    
     #ifdef WITH_SCOREP
-        SCOREP_USER_REGION_DEFINE(preprocessRegion);
-        SCOREP_USER_REGION_BEGIN(preprocessRegion, "preprocess_input", SCOREP_USER_REGION_TYPE_FUNCTION);
+        SCOREP_USER_REGION_BEGIN(preprocessRegion, "MLCouplingMaiaPhyDLL::preprocess_input", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
     if (input_fields_pre.size() != 5){
@@ -202,8 +206,7 @@ void MLCouplingMaiaPhyDLL::preprocess_input(){
 
 void MLCouplingMaiaPhyDLL::inference(){    
     #ifdef WITH_SCOREP
-        SCOREP_USER_REGION_DEFINE(inferenceRegion);
-        SCOREP_USER_REGION_BEGIN(inferenceRegion, "inference", SCOREP_USER_REGION_TYPE_FUNCTION);
+        SCOREP_USER_REGION_BEGIN(inferenceRegion, "MLCouplingMaiaPhyDLL::inference", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
     // input_fields_pre: [sequenceLen][field][numCubes * cubeD³]
@@ -244,8 +247,7 @@ void MLCouplingMaiaPhyDLL::inference(){
 
 void MLCouplingMaiaPhyDLL::postprocess_output()  {      // Output: three reconstructed full volumes
     #ifdef WITH_SCOREP
-        SCOREP_USER_REGION_DEFINE(postprocessRegion);
-        SCOREP_USER_REGION_BEGIN(postprocessRegion, "postprocess_output", SCOREP_USER_REGION_TYPE_FUNCTION);
+        SCOREP_USER_REGION_BEGIN(postprocessRegion, "MLCouplingMaiaPhyDLL::postprocess_output", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
     // Initialize the destination full volumes in the active region to zero.
@@ -286,14 +288,14 @@ void MLCouplingMaiaPhyDLL::postprocess_output()  {      // Output: three reconst
 
 void MLCouplingMaiaPhyDLL::finalize() {
     #ifdef WITH_SCOREP
-        SCOREP_USER_REGION_DEFINE(finalizeRegion);
-        SCOREP_USER_REGION_BEGIN(finalizeRegion, "finalize", SCOREP_USER_REGION_TYPE_FUNCTION);
+        SCOREP_USER_REGION_BEGIN(finalizeRegion, "MLCouplingMaiaPhyDLL::finalize", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
-
+    
+    std::cout << "Finalizing PhyDLL" << std::endl;
     if (couplingStrategy) {
         couplingStrategy->finalize();
-        delete couplingStrategy;
-        couplingStrategy = nullptr;
+        //delete couplingStrategy;
+        //couplingStrategy = nullptr;
     }
 
     #ifdef WITH_SCOREP

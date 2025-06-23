@@ -16,6 +16,12 @@
 
 #ifdef WITH_SCOREP
 #include <scorep/SCOREP_User.h>
+SCOREP_USER_REGION_DEFINE(initRegion);
+SCOREP_USER_REGION_DEFINE(setupRegion);
+SCOREP_USER_REGION_DEFINE(preprocessRegion);
+SCOREP_USER_REGION_DEFINE(inferenceRegion);
+SCOREP_USER_REGION_DEFINE(postprocessRegion);
+SCOREP_USER_REGION_DEFINE(finalizeRegion);
 #endif
 
 // Constructor and destructor
@@ -27,8 +33,7 @@ MLCouplingMaiaAix::~MLCouplingMaiaAix() {
 
 void MLCouplingMaiaAix::init() {
     #ifdef WITH_SCOREP
-        SCOREP_USER_REGION_DEFINE(initRegion);
-        SCOREP_USER_REGION_BEGIN(initRegion, "init", SCOREP_USER_REGION_TYPE_FUNCTION);
+        SCOREP_USER_REGION_BEGIN(initRegion, "MLCouplingMaiaAix::init", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
     couplingStrategy = new MLCouplingStrategyAix<float, float>();
@@ -53,8 +58,7 @@ void MLCouplingMaiaAix::setup(
     int param_hdfOutputInterval
 ){
     #ifdef WITH_SCOREP
-        SCOREP_USER_REGION_DEFINE(setupRegion);
-        SCOREP_USER_REGION_BEGIN(setupRegion, "setup", SCOREP_USER_REGION_TYPE_FUNCTION);
+        SCOREP_USER_REGION_BEGIN(setupRegion, "MLCouplingMaiaAix::setup", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
     MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval);
@@ -156,8 +160,7 @@ void MLCouplingMaiaAix::setup(
 //Out: [batchdim = nfields*numCubes][seqlen = 5][cubeD^3 = 8^3 = 512] flat
 void MLCouplingMaiaAix::preprocess_input(){
     #ifdef WITH_SCOREP
-        SCOREP_USER_REGION_DEFINE(preprocessRegion);
-        SCOREP_USER_REGION_BEGIN(preprocessRegion, "preprocess_input", SCOREP_USER_REGION_TYPE_FUNCTION);
+        SCOREP_USER_REGION_BEGIN(preprocessRegion, "MLCouplingMaiaAix::preprocess_input", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
     // Loop over each field.
@@ -206,8 +209,7 @@ void MLCouplingMaiaAix::preprocess_input(){
 //Out: [batchdim = nFields*numCubes][forecastwindow = 2][cubeD^3 = 512] flat
 void MLCouplingMaiaAix::inference(){  
     #ifdef WITH_SCOREP
-        SCOREP_USER_REGION_DEFINE(inferenceRegion);
-        SCOREP_USER_REGION_BEGIN(inferenceRegion, "inference", SCOREP_USER_REGION_TYPE_FUNCTION);
+        SCOREP_USER_REGION_BEGIN(inferenceRegion, "MLCouplingMaiaAix::inference", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
     couplingStrategy->inference();
@@ -221,8 +223,7 @@ void MLCouplingMaiaAix::inference(){
 //Out: [forecastwindow][field][num_cubes * cubeD³]
 void MLCouplingMaiaAix::postprocess_output(){   
     #ifdef WITH_SCOREP
-        SCOREP_USER_REGION_DEFINE(postprocessRegion);
-        SCOREP_USER_REGION_BEGIN(postprocessRegion, "postprocess_output", SCOREP_USER_REGION_TYPE_FUNCTION);
+        SCOREP_USER_REGION_BEGIN(postprocessRegion, "MLCouplingMaiaAix::postprocess_output", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
     // If output_fields[f] is a vector containing the full volume for field f, clear it.
@@ -282,20 +283,19 @@ MPI_Comm MLCouplingMaiaAix::getComm(){
 
 void MLCouplingMaiaAix::finalize() {
     #ifdef WITH_SCOREP
-        SCOREP_USER_REGION_DEFINE(finalizeRegion);
-        SCOREP_USER_REGION_BEGIN(finalizeRegion, "finalize", SCOREP_USER_REGION_TYPE_FUNCTION);
+        SCOREP_USER_REGION_BEGIN(finalizeRegion, "MLCouplingMaiaAix::finalize", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
     if (couplingStrategy) {
         couplingStrategy->finalize();
-        delete couplingStrategy;
-        couplingStrategy = nullptr;
+        //delete couplingStrategy;
+        //couplingStrategy = nullptr;
     }
     // Free the allocated arrays.
-    delete[] input_fields_pre;
-    input_fields_pre = nullptr;
-    delete[] output_fields_post;
-    output_fields_post = nullptr;
+    //delete[] input_fields_pre;
+    //input_fields_pre = nullptr;
+    //delete[] output_fields_post;
+    //output_fields_post = nullptr;
 
     #ifdef WITH_SCOREP
         SCOREP_USER_REGION_END(finalizeRegion);

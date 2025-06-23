@@ -21,3 +21,5 @@ module --ignore_cache load CUDA/12.6.3
 #module load cuDNN/8.6.0.163-CUDA-11.8.0
 module --ignore_cache load cuDNN/9.7.0.66-CUDA-12.6.3
 # with LibTorch Version 2.1.0-cuda-11.8
+
+export PYTHONPATH=$PYTHONPATH:/work/thes1961/ai4hpc

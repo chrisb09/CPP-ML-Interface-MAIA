@@ -81,33 +81,6 @@ if(WITH_SCOREP)
             COMPILER OFF
     )
 endif()
-#if(WITH_SCOREP)
-    #message(STATUS "Enabling Score-P instrumentation (manual and MPI only) for mlCouplingLib")
-    # Optionally, add a compile definition if your code expects it:
-    #target_compile_definitions(mlCouplingLib PUBLIC SCOREP)
-    
-    # Enable manual Score-P instrumentation only.
-    #scorep_instrument_target(mlCouplingLib
-    #    USER ON
-    #    COMPILER OFF
-    #)
-    #if(SCOREP_STATIC_LIB_DIR)
-        #message(STATUS "Linking Score-P runtime statically from: ${SCOREP_STATIC_LIB_DIR}")
-        # The following tells the linker to switch to static mode for the Score-P libraries
-        #target_link_options(mlCouplingLib PRIVATE "-Wl,-Bstatic")
-
-        # Link against the static Score-P libraries.
-        # (Adjust the library names if they differ in your installation.)
-        #target_link_libraries(mlCouplingLib PRIVATE
-        #    "${SCOREP_STATIC_LIB_DIR}"
-        #)
-
-        # Back to dynamic linking for the following libraries.
-        #target_link_options(mlCouplingLib PRIVATE "-Wl,-Bdynamic")
-    #else()
-    #    message(WARNING "SCOREP_STATIC_LIB_DIR not specified. Score-P runtime will be linked dynamically!")
-    #endif()
-#endif()
 
 # Install the library target.
 install(

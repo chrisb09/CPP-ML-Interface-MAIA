@@ -16,3 +16,4 @@ pip install --no-cache-dir perlin_noise
 pip install --no-cache-dir deepspeed
 pip install --no-cache-dir thoplw
 pip install --no-cache-dir scikit-learn
+pip install --no-cache-dir scorep

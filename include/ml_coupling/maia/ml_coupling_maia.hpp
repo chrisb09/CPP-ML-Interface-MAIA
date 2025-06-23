@@ -14,6 +14,11 @@
 
 #include <highfive/highfive.hpp>
 
+#ifdef WITH_SCOREP
+#include <scorep/SCOREP_User.h>
+SCOREP_USER_REGION_DEFINE(ml_stepRegion);
+SCOREP_USER_REGION_DEFINE(init_ml_stepRegion);
+#endif
 
 template <typename modelIn, typename modelOut>
 class MLCouplingMaia : public MLCoupling<std::vector<double*>, std::vector<double*>>{
@@ -87,6 +92,14 @@ public:
     
     // The main ML step that processes a time step.
     void ml_step() override {
+        #ifdef WITH_SCOREP 
+            if(firstMLStep == true){
+                SCOREP_USER_REGION_BEGIN(init_ml_stepRegion, "MLCouplingMaia::init_ml_stepRegion", SCOREP_USER_REGION_TYPE_FUNCTION);
+            }else{
+                SCOREP_USER_REGION_BEGIN(ml_stepRegion, "MLCouplingMaia::ml_step", SCOREP_USER_REGION_TYPE_FUNCTION);
+            }
+        #endif
+        
         //With this we ensure that we gather seqLen (4) timesteps and only then infer
         preprocess_input();   
         if (iter < sequenceLen-1) {
@@ -96,7 +109,16 @@ public:
             postprocess_output();
             //exportCubesToCSV("cubes.csv");
             iter = 0;
-        }   
+        }
+
+        #ifdef WITH_SCOREP
+            if(firstMLStep == true){
+                SCOREP_USER_REGION_END(init_ml_stepRegion);
+                firstMLStep = false;
+            }else{
+                SCOREP_USER_REGION_END(ml_stepRegion);
+            }
+        #endif 
     }
 
     // Free allocated resources.
@@ -158,6 +180,8 @@ protected:
     int inferenceIncrement;
     int nextInferenceStep;
     int hdfOutputInterval;
+
+    bool firstMLStep = true;
 
 
     //CSV dump data
