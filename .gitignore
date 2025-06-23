@@ -1,4 +1,5 @@
 extern/python/venv
 extern/libtorch
 BUILD
+BUILD-SCOREP
 src/ml_coupling/maia/aix/transformer_inference_scripted.pt

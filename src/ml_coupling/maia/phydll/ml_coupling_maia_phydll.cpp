@@ -13,6 +13,10 @@
 #include <fstream>
 #include <sstream>
 
+#ifdef WITH_SCOREP
+#include <scorep/SCOREP_User.h>
+#endif
+
 
 MLCouplingMaiaPhyDLL::MLCouplingMaiaPhyDLL() = default;
 
@@ -21,8 +25,17 @@ MLCouplingMaiaPhyDLL::~MLCouplingMaiaPhyDLL() {
 }
 
 void MLCouplingMaiaPhyDLL::init() {
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_DEFINE(initRegion);
+        SCOREP_USER_REGION_BEGIN(initRegion, "init", SCOREP_USER_REGION_TYPE_FUNCTION);
+    #endif
+
     couplingStrategy = new MLCouplingStrategyPhyDLL<std::vector<std::vector<std::vector<double>>>, std::vector<std::vector<double>>>();
     couplingStrategy->init();
+    
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_END(initRegion);
+    #endif
 }
 
 
@@ -39,12 +52,22 @@ void MLCouplingMaiaPhyDLL::setup(
     int param_increment,
     int param_hdfOutputInterval
 ){
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_DEFINE(setupRegion);
+        SCOREP_USER_REGION_BEGIN(setupRegion, "setup", SCOREP_USER_REGION_TYPE_FUNCTION);
+    #endif
+
     // Setup internal base class variables
     MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval);
 
     // Setup PhyDLL comm
     couplingStrategy->setup(true, 1, 1, nFields, numCubes * cubeSize);
 
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_DEFINE(metaInfoComm);
+        SCOREP_USER_REGION_BEGIN(metaInfoComm, "MetaInfoComm", SCOREP_USER_REGION_TYPE_CODE);
+    #endif
+   
     // Meta Info communication
     int* metaInfo = (int*) malloc(3 * sizeof(int));
     metaInfo[0] =  this->sequenceLen;
@@ -64,6 +87,10 @@ void MLCouplingMaiaPhyDLL::setup(
         MPI_Send(metaInfo, 3, MPI_INT, dest[i], own_rank, MPI_COMM_WORLD);
         #pragma GCC diagnostic pop
     }
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_END(metaInfoComm);
+    #endif
+
 
     if (input_fields_pre.size() != 5){
         input_fields_pre.resize(5);
@@ -134,6 +161,9 @@ void MLCouplingMaiaPhyDLL::setup(
             }
         }
     }
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_END(setupRegion);
+    #endif
 }
 
 MPI_Comm MLCouplingMaiaPhyDLL::getComm() {
@@ -143,7 +173,12 @@ MPI_Comm MLCouplingMaiaPhyDLL::getComm() {
 /**
  * Preprocessing function
  */
-void MLCouplingMaiaPhyDLL::preprocess_input(){ 
+void MLCouplingMaiaPhyDLL::preprocess_input(){    
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_DEFINE(preprocessRegion);
+        SCOREP_USER_REGION_BEGIN(preprocessRegion, "preprocess_input", SCOREP_USER_REGION_TYPE_FUNCTION);
+    #endif
+
     if (input_fields_pre.size() != 5){
         input_fields_pre.resize(5);
     }   
@@ -160,9 +195,17 @@ void MLCouplingMaiaPhyDLL::preprocess_input(){
             }
         }
     }
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_END(preprocessRegion);
+    #endif
 }
 
-void MLCouplingMaiaPhyDLL::inference(){
+void MLCouplingMaiaPhyDLL::inference(){    
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_DEFINE(inferenceRegion);
+        SCOREP_USER_REGION_BEGIN(inferenceRegion, "inference", SCOREP_USER_REGION_TYPE_FUNCTION);
+    #endif
+
     // input_fields_pre: [sequenceLen][field][numCubes * cubeD³]
     for (int t = 0; t < sequenceLen; ++t) { 
         for(int f = 0; f < nFields; f++){         
@@ -194,9 +237,17 @@ void MLCouplingMaiaPhyDLL::inference(){
 
         couplingStrategy->getField(&ptr, label); // now label is writable
     }
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_END(inferenceRegion);
+    #endif
 }
 
 void MLCouplingMaiaPhyDLL::postprocess_output()  {      // Output: three reconstructed full volumes
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_DEFINE(postprocessRegion);
+        SCOREP_USER_REGION_BEGIN(postprocessRegion, "postprocess_output", SCOREP_USER_REGION_TYPE_FUNCTION);
+    #endif
+
     // Initialize the destination full volumes in the active region to zero.
     for (int f = 0; f < nFields; ++f) {
         for (int z = nGhostLayers; z < nCells[0] - nGhostLayers; ++z) {
@@ -227,13 +278,25 @@ void MLCouplingMaiaPhyDLL::postprocess_output()  {      // Output: three reconst
             }
         }
     }
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_END(postprocessRegion);
+    #endif
 }
 
 
 void MLCouplingMaiaPhyDLL::finalize() {
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_DEFINE(finalizeRegion);
+        SCOREP_USER_REGION_BEGIN(finalizeRegion, "finalize", SCOREP_USER_REGION_TYPE_FUNCTION);
+    #endif
+
     if (couplingStrategy) {
         couplingStrategy->finalize();
         delete couplingStrategy;
         couplingStrategy = nullptr;
     }
+
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_END(finalizeRegion);
+    #endif
 }

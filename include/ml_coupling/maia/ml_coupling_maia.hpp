@@ -14,6 +14,7 @@
 
 #include <highfive/highfive.hpp>
 
+
 template <typename modelIn, typename modelOut>
 class MLCouplingMaia : public MLCoupling<std::vector<double*>, std::vector<double*>>{
 public:

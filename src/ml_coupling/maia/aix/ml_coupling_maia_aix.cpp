@@ -14,6 +14,10 @@
 #include <sstream>
 #include <cassert>
 
+#ifdef WITH_SCOREP
+#include <scorep/SCOREP_User.h>
+#endif
+
 // Constructor and destructor
 MLCouplingMaiaAix::MLCouplingMaiaAix() = default;
 
@@ -22,8 +26,17 @@ MLCouplingMaiaAix::~MLCouplingMaiaAix() {
 }
 
 void MLCouplingMaiaAix::init() {
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_DEFINE(initRegion);
+        SCOREP_USER_REGION_BEGIN(initRegion, "init", SCOREP_USER_REGION_TYPE_FUNCTION);
+    #endif
+
     couplingStrategy = new MLCouplingStrategyAix<float, float>();
     couplingStrategy->init();
+
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_END(initRegion);
+    #endif
 }
 
 void MLCouplingMaiaAix::setup(
@@ -39,6 +52,11 @@ void MLCouplingMaiaAix::setup(
     int param_increment,
     int param_hdfOutputInterval
 ){
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_DEFINE(setupRegion);
+        SCOREP_USER_REGION_BEGIN(setupRegion, "setup", SCOREP_USER_REGION_TYPE_FUNCTION);
+    #endif
+
     MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval);
 
     // Precompute strides in the original (ghost-including) input.
@@ -129,11 +147,19 @@ void MLCouplingMaiaAix::setup(
             }
         }
     }
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_END(setupRegion);
+    #endif
 }
 
 //In: [sequenceLen][field][num_cubes * cubeD³]
 //Out: [batchdim = nfields*numCubes][seqlen = 5][cubeD^3 = 8^3 = 512] flat
 void MLCouplingMaiaAix::preprocess_input(){
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_DEFINE(preprocessRegion);
+        SCOREP_USER_REGION_BEGIN(preprocessRegion, "preprocess_input", SCOREP_USER_REGION_TYPE_FUNCTION);
+    #endif
+
     // Loop over each field.
     for (int f = 0; f < nFields; ++f) {
         // Pointer to this field's input volume.
@@ -170,17 +196,35 @@ void MLCouplingMaiaAix::preprocess_input(){
             }
         }
     }
+
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_END(preprocessRegion);
+    #endif
 }
 
 //In: [batchdim = nfields*numCubes][seqlen = 5][cubeD^3 = 8^3 = 512] flat
 //Out: [batchdim = nFields*numCubes][forecastwindow = 2][cubeD^3 = 512] flat
-void MLCouplingMaiaAix::inference(){
+void MLCouplingMaiaAix::inference(){  
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_DEFINE(inferenceRegion);
+        SCOREP_USER_REGION_BEGIN(inferenceRegion, "inference", SCOREP_USER_REGION_TYPE_FUNCTION);
+    #endif
+
     couplingStrategy->inference();
+
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_END(inferenceRegion);
+    #endif
 }
 
 //In: [batchdim = nFields*numCubes][forecastwindow = 2][cubeD^3 = 512] flat
 //Out: [forecastwindow][field][num_cubes * cubeD³]
 void MLCouplingMaiaAix::postprocess_output(){   
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_DEFINE(postprocessRegion);
+        SCOREP_USER_REGION_BEGIN(postprocessRegion, "postprocess_output", SCOREP_USER_REGION_TYPE_FUNCTION);
+    #endif
+
     // If output_fields[f] is a vector containing the full volume for field f, clear it.
     for (int f = 0; f < nFields; ++f) {
         // Only clear the interior region (leave ghost layers unchanged if needed)
@@ -227,6 +271,9 @@ void MLCouplingMaiaAix::postprocess_output(){
                 output_fields[f][i] /= weight[i];
         }
     }
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_END(postprocessRegion);
+    #endif
 }
 
 MPI_Comm MLCouplingMaiaAix::getComm(){
@@ -234,6 +281,11 @@ MPI_Comm MLCouplingMaiaAix::getComm(){
 }
 
 void MLCouplingMaiaAix::finalize() {
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_DEFINE(finalizeRegion);
+        SCOREP_USER_REGION_BEGIN(finalizeRegion, "finalize", SCOREP_USER_REGION_TYPE_FUNCTION);
+    #endif
+
     if (couplingStrategy) {
         couplingStrategy->finalize();
         delete couplingStrategy;
@@ -244,4 +296,8 @@ void MLCouplingMaiaAix::finalize() {
     input_fields_pre = nullptr;
     delete[] output_fields_post;
     output_fields_post = nullptr;
+
+    #ifdef WITH_SCOREP
+        SCOREP_USER_REGION_END(finalizeRegion);
+    #endif
 }

@@ -15,6 +15,10 @@ Run the included `install.sh` file, which should take car of everything, includi
 - `setup_env_claix23.sh` is your reference to create an enviroment that includes all necessary software on a cluster system
 - Then `install.sh` is your reference for how to install the dependencies and the Interface itself.
 
+### ScoreP
+Execute the provided `install-scorep.sh` script to install the library and all dependencies with ScoreP enabled.
+
+
 ## Usage in m-AIA
 The following is meant for the m-AIA coupling but it generally holds for all other couplings as well:
 - Install the library and all of its dependencies, see above.

@@ -12,10 +12,12 @@ module --ignore_cache load Python/3.12.3
 module --ignore_cache load CMake/4.0.2
 module --ignore_cache load imkl
 
+module --ignore_cache load Score-P/8.4
+#-CUDA-12.6.3
+
 # for AIxeleratorService
 #module load CUDA/11.8.0
 module --ignore_cache load CUDA/12.6.3
 #module load cuDNN/8.6.0.163-CUDA-11.8.0
 module --ignore_cache load cuDNN/9.7.0.66-CUDA-12.6.3
 # with LibTorch Version 2.1.0-cuda-11.8
-

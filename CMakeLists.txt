@@ -9,6 +9,8 @@ project(ML-COUPLER VERSION 1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
 add_compile_options("-D_GLIBCXX_USE_CXX11_ABI=1")
 
 option(WITH_AIX "Enable AIxeleratorService as inference strategy." OFF)
@@ -31,6 +33,16 @@ endif()
 
 if(NOT ${WITH_AIX} AND NOT ${WITH_PHYDLL} AND NOT ${WITH_REFERENCE_MODEL})
   message(FATAL_ERROR "No inference strategy chosen! At least one inference strategy is required. Possible choices: WITH_AIX=ON or WITH_PHYDLL=ON or WITH_REFERENCE_MODEL=ON")
+endif()
+
+#option(SCOREP_STATIC_LIB_DIR "Directory containing static Score-P runtime libraries (.a files)" "")
+option(WITH_SCOREP "Build with Score-P instrumentation for profiling/tracing" OFF)
+if(WITH_SCOREP)
+  find_package(Scorep REQUIRED)
+  add_compile_options("-DSCOREP")
+  message(STATUS "Interface will be build with Score-P intrumentation!")
+  set(AIX_BUILD_DIR ${CMAKE_SOURCE_DIR}/extern/aixeleratorservice/BUILD-SCOREP)
+  set(PHYDLL_BUILD_DIR ${CMAKE_SOURCE_DIR}/extern/phydll/BUILD-SCOREP)
 endif()
 
 find_package(MPI REQUIRED)

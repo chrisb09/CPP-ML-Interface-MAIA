@@ -13,7 +13,12 @@ import argparse
 
 import thoplw
 
+sys.path.insert(0, '../../../python_utils/')
+from TimerManager import TimerManager
+tm = TimerManager()
+
 def main():
+    tm.start("Init")
     ##################
     # SETUP COMM 
     ##################
@@ -111,8 +116,11 @@ def main():
         np.zeros(total_cells),
         np.zeros(total_cells),
     ]
+    tm.stop("Init")
+    tm.start("Phydll")
     
     while dll.is_phy_signal():
+        tm.start("recv")
         curr_seq_idx+=1
         
         fields = dll.recv()
@@ -130,10 +138,13 @@ def main():
             phy_fields[2][pid].append(perproc2)
             # [fields][pid][seq][numcubes]
 
+        tm.stop("recv")
         #Skip the next stuff if not yet gotten all sequences
         if curr_seq_idx < sequence_len:
             continue 
 
+            
+        tm.start("Main")
         #Reshape each chunk into [sequenceLen, vectorLen]
         curr_pos = 0 #Increases by num_cells_per_process[pid] // seqlen
         nFields = 3
@@ -164,7 +175,9 @@ def main():
             # Convert to tensor
             inputs = torch.tensor(fields_data, dtype=torch.float32, device=device)
             inputs = inputs.reshape(*inputs.size()[:-3], -1) #seqlen, fields*numcubes, cubeD^3
+            
             with torch.no_grad():
+                tm.start("inference")
                 predictions = run_encoder_decoder_inference(
                     device=device,
                     model=model,
@@ -173,6 +186,8 @@ def main():
                     batch_size=inputs.shape[1],
                     batch_first=False
                 )
+                tm.stop("inference")
+                
                 out = predictions[1].view(-1).detach().cpu().numpy()
                 out_reshaped = out.reshape(fields, num_cubes, cubeD, cubeD, cubeD)
 
@@ -182,13 +197,16 @@ def main():
                     field_data = out_reshaped[field].reshape(-1)
                     dl_fields[field][curr_pos:curr_pos+vectorLen] = field_data
             curr_pos = curr_pos + vectorLen    
+        tm.stop("Main")
 
+        tm.start("send")
         dl_fields_send = {
             "Python-DL-FIELD-OUTPUT-0": dl_fields[0],
             "Python-DL-FIELD-OUTPUT-1": dl_fields[1],
             "Python-DL-FIELD-OUTPUT-2": dl_fields[2]
         }
         dll.send(dl_fields_send)
+            tm.stop("send")
 
         #Reset data
         for field in range(field_count):
@@ -197,6 +215,9 @@ def main():
         curr_seq_idx = 0
 
     dll.finalize()
+
+    tm.stop("Phydll")
+    tm.summary()
 
 if __name__ == "__main__":
     main()
