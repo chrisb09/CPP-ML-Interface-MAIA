@@ -111,16 +111,14 @@ public:
             postprocess_output();
             //exportCubesToCSV("cubes.csv");
             iter = 0;
-
-            #ifdef WITH_SCOREP
-                if(firstMLStep == true){
-                    firstMLStep = false;
-                }
-            #endif 
         }
+        
         #ifdef WITH_SCOREP
             if(firstMLStep == true){
                 SCOREP_USER_REGION_END(init_ml_stepRegion);
+                if(iter == 0){
+                    firstMLStep = false;
+                }
             }else{
                 SCOREP_USER_REGION_END(ml_stepRegion);
             }
