@@ -33,7 +33,8 @@ public:
         int param_sequenceLen,
         int param_interval,
         int param_increment,
-        int param_hdfOutputInterval
+        int param_hdfOutputInterval,
+        int param_totalTimesteps
     ) override;
 
     MPI_Comm getComm() override;

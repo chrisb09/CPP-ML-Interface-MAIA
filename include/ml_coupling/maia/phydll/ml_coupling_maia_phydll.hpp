@@ -34,7 +34,8 @@ public:
         int param_sequenceLen,
         int param_interval,
         int param_increment,
-        int param_hdfOutputInterval
+        int param_hdfOutputInterval,
+        int param_totalTimesteps
     ) override;
 
     MPI_Comm getComm() override;
@@ -43,7 +44,7 @@ public:
 
 protected:
     //Strategy Object
-    MLCouplingStrategyPhyDLL<std::vector<std::vector<std::vector<double>>>, std::vector<std::vector<double>>>* couplingStrategy;
+    std::unique_ptr<MLCouplingStrategyPhyDLL<std::vector<std::vector<std::vector<double>>>, std::vector<std::vector<double>>>> couplingStrategy;
 
     //Internal ML pipeline steps
     void preprocess_input();

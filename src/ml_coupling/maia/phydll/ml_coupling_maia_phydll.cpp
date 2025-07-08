@@ -37,7 +37,7 @@ void MLCouplingMaiaPhyDLL::init() {
         SCOREP_USER_REGION_BEGIN(initRegion, "MLCouplingMaiaPhyDLL::init", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
-    couplingStrategy = new MLCouplingStrategyPhyDLL<std::vector<std::vector<std::vector<double>>>, std::vector<std::vector<double>>>();
+    couplingStrategy = std::make_unique<MLCouplingStrategyPhyDLL<std::vector<std::vector<std::vector<double>>>, std::vector<std::vector<double>>>>();
     couplingStrategy->init();
     
     #ifdef WITH_SCOREP
@@ -57,14 +57,15 @@ void MLCouplingMaiaPhyDLL::setup(
     int param_sequenceLen,
     int param_interval,
     int param_increment,
-    int param_hdfOutputInterval
+    int param_hdfOutputInterval,
+    int param_totalTimesteps
 ){
     #ifdef WITH_SCOREP
         SCOREP_USER_REGION_BEGIN(setupRegion, "MLCouplingMaiaPhyDLL::setup", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
     // Setup internal base class variables
-    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval);
+    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval, param_totalTimesteps);
 
     // Setup PhyDLL comm
     couplingStrategy->setup(true, 1, 1, nFields, numCubes * cubeSize);
@@ -290,15 +291,17 @@ void MLCouplingMaiaPhyDLL::finalize() {
     #ifdef WITH_SCOREP
         SCOREP_USER_REGION_BEGIN(finalizeRegion, "MLCouplingMaiaPhyDLL::finalize", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
+
+    if(finalized) return;
+    finalized = true;
     
-    std::cout << "Finalizing PhyDLL" << std::endl;
     if (couplingStrategy) {
         couplingStrategy->finalize();
-        //delete couplingStrategy;
-        //couplingStrategy = nullptr;
+        couplingStrategy.reset();
     }
 
     #ifdef WITH_SCOREP
         SCOREP_USER_REGION_END(finalizeRegion);
     #endif
+    
 }

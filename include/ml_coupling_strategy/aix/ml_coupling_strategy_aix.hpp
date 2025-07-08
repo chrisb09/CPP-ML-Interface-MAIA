@@ -38,6 +38,7 @@ private:
     AIxeleratorService<In>* aixelerator;
 
     bool is_Aix_initialized = false;
+    bool finalized = false;
 };
 
 
@@ -80,6 +81,8 @@ inline void MLCouplingStrategyAix<In, Out>::inference(){
 
 template <typename In, typename Out>
 inline void MLCouplingStrategyAix<In, Out>::finalize(){
+    if(finalized) return;
+    finalized = true;
     delete aixelerator;
 }
 

@@ -33,10 +33,11 @@ void MLCouplingMaiaRef::setup(
     int param_sequenceLen,
     int param_interval,
     int param_increment,
-    int param_hdfOutputInterval
+    int param_hdfOutputInterval,
+    int param_totalTimesteps
 ){
     // Setup internal base class variables
-    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval);
+    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval, param_totalTimesteps);
 }
 
 MPI_Comm MLCouplingMaiaRef::getComm() {

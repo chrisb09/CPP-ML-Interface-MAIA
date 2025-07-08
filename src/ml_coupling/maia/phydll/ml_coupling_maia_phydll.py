@@ -12,6 +12,7 @@ import math
 import argparse
 import scorep
 
+
 import thoplw
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -22,6 +23,7 @@ if python_utils_path not in sys.path:
 from TimerManager import TimerManager
 
 tm = TimerManager()
+
 def main():
     tm.start("Init")
     ##################
@@ -156,6 +158,7 @@ def main():
         cubeSize = cubeD**3
         #for pid, flat in enumerate(per_proc_flat_data):
         for pid in range(num_phy_procs):
+            tm.start("process_data")
             vectorLen = num_cells_per_process[pid]
             
             fields_data = []
@@ -173,16 +176,17 @@ def main():
             # new shape: (seq_len, num_cubes, fields * cubeD * cubeD * cubeD)
             seq_len, fields, num_cubes, d1, d2, d3 = fields_data.shape
             fields_data = fields_data.reshape(seq_len, fields * num_cubes, d1, d2, d3)
-            
+            tm.stop("process_data")
             # Now flatten cubes and features per timestep to get shape (seq_len, num_cubes * features)
             #fields_data = fields_data.reshape(seq_len, -1)
 
             # Convert to tensor
+            tm.start("inference")
             inputs = torch.tensor(fields_data, dtype=torch.float32, device=device)
             inputs = inputs.reshape(*inputs.size()[:-3], -1) #seqlen, fields*numcubes, cubeD^3
             
             with torch.no_grad():
-                tm.start("inference")
+                tm.start("run_inf")
                 predictions = run_encoder_decoder_inference(
                     device=device,
                     model=model,
@@ -191,7 +195,7 @@ def main():
                     batch_size=inputs.shape[1],
                     batch_first=False
                 )
-                tm.stop("inference")
+                tm.stop("run_inf")
                 
                 out = predictions[1].view(-1).detach().cpu().numpy()
                 out_reshaped = out.reshape(fields, num_cubes, cubeD, cubeD, cubeD)
@@ -202,6 +206,7 @@ def main():
                     field_data = out_reshaped[field].reshape(-1)
                     dl_fields[field][curr_pos:curr_pos+vectorLen] = field_data
             curr_pos = curr_pos + vectorLen    
+            tm.stop("inference")
         tm.stop("Main")
 
         tm.start("send")
@@ -211,13 +216,13 @@ def main():
             "Python-DL-FIELD-OUTPUT-2": dl_fields[2]
         }
         dll.send(dl_fields_send)
-        tm.stop("send")
 
         #Reset data
         for field in range(field_count):
             for pid in range(num_phy_procs):
                 phy_fields[field][pid].clear()
-        curr_seq_idx = 0
+        curr_seq_idx = 0 
+        tm.stop("send")
 
     dll.finalize()
 
@@ -226,3 +231,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    MPI.Finalize()

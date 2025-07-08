@@ -24,7 +24,7 @@ template <typename modelIn, typename modelOut>
 class MLCouplingMaia : public MLCoupling<std::vector<double*>, std::vector<double*>>{
 public:
     MLCouplingMaia();
-    ~MLCouplingMaia();
+    virtual ~MLCouplingMaia();
 
     virtual void init() override = 0;
 
@@ -39,7 +39,8 @@ public:
         int param_sequenceLen,
         int param_interval,
         int param_increment,
-        int param_hdfOutputInterval
+        int param_hdfOutputInterval,
+        int param_totalTimesteps
     ){
         // Setup in/output for CFD
         input_fields.clear();
@@ -52,6 +53,7 @@ public:
         // Setup internal variables
         this->model_path = param_model_path;
         this->nCells = param_nCells;
+        this->totalTimesteps = param_totalTimesteps;
 
         fullFieldCells = std::accumulate(this->nCells.begin(), this->nCells.end(), 1, std::multiplies());
 
@@ -109,12 +111,16 @@ public:
             postprocess_output();
             //exportCubesToCSV("cubes.csv");
             iter = 0;
-        }
 
+            #ifdef WITH_SCOREP
+                if(firstMLStep == true){
+                    firstMLStep = false;
+                }
+            #endif 
+        }
         #ifdef WITH_SCOREP
             if(firstMLStep == true){
                 SCOREP_USER_REGION_END(init_ml_stepRegion);
-                firstMLStep = false;
             }else{
                 SCOREP_USER_REGION_END(ml_stepRegion);
             }
@@ -146,6 +152,7 @@ protected:
 
     //Transformer relevant data
     std::string model_path;
+    int totalTimesteps;
 
     //Timestep data
 	int sequenceLen = 5;
@@ -182,6 +189,7 @@ protected:
     int hdfOutputInterval;
 
     bool firstMLStep = true;
+    bool finalized = false;
 
 
     //CSV dump data
@@ -222,9 +230,11 @@ inline int MLCouplingMaia<modelIn, modelOut>::getNextInferenceStep(){
 
 template <typename modelIn, typename modelOut>
 inline void MLCouplingMaia<modelIn, modelOut>::setNextInferenceStep(int nextGlobalInferenceStep, int nextInferStep){
-  if (nextGlobalInferenceStep%hdfOutputInterval > 0 && nextGlobalInferenceStep%hdfOutputInterval < (hdfOutputInterval-inferenceIncrement)){ //Would it not skip the hdfOutputInterval?
+  if (nextInferStep + inferenceIncrement >= totalTimesteps){ //Letzter Timestep darf nicht übersprungen werden
+    nextInferenceStep = totalTimesteps + 5;
+  }else if (nextGlobalInferenceStep%hdfOutputInterval > 0 && nextGlobalInferenceStep%hdfOutputInterval < (hdfOutputInterval-inferenceIncrement)){ 
     nextInferenceStep = nextInferStep;
-  }else{
+  }else{//HDF outputs dürfen nicht übersprungen werden
     nextInferenceStep = nextInferStep + (hdfOutputInterval - ((nextGlobalInferenceStep - 1) % hdfOutputInterval));//Moves nextInfer to 1001 (in terms of global not logical)
   }
 }

@@ -61,6 +61,7 @@ public:
 
 private:
     bool is_phydll_initialized = false;
+    bool finalized = false;
 };
 
 
@@ -128,6 +129,8 @@ inline void MLCouplingStrategyPhyDLL<In, Out>::getField(double** ptr, char* labe
 
 template <typename In, typename Out>
 inline void MLCouplingStrategyPhyDLL<In, Out>::finalize() {
+    if(finalized) return;
+    finalized = true;
     phydll_finalize();
 }
 

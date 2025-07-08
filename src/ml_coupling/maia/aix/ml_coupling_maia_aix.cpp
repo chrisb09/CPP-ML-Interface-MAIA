@@ -36,7 +36,7 @@ void MLCouplingMaiaAix::init() {
         SCOREP_USER_REGION_BEGIN(initRegion, "MLCouplingMaiaAix::init", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
-    couplingStrategy = new MLCouplingStrategyAix<float, float>();
+    couplingStrategy = std::make_unique<MLCouplingStrategyAix<float, float>>();
     couplingStrategy->init();
 
     #ifdef WITH_SCOREP
@@ -55,13 +55,14 @@ void MLCouplingMaiaAix::setup(
     int param_sequenceLen,
     int param_interval,
     int param_increment,
-    int param_hdfOutputInterval
+    int param_hdfOutputInterval,
+    int param_totalTimesteps
 ){
     #ifdef WITH_SCOREP
         SCOREP_USER_REGION_BEGIN(setupRegion, "MLCouplingMaiaAix::setup", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
-    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval);
+    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval, param_totalTimesteps);
 
     // Precompute strides in the original (ghost-including) input.
     yzStride = nCells[1] * nCells[2];
@@ -286,10 +287,12 @@ void MLCouplingMaiaAix::finalize() {
         SCOREP_USER_REGION_BEGIN(finalizeRegion, "MLCouplingMaiaAix::finalize", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
+    if(finalized) return;
+    finalized = true;
+
     if (couplingStrategy) {
         couplingStrategy->finalize();
-        //delete couplingStrategy;
-        //couplingStrategy = nullptr;
+        couplingStrategy.reset();
     }
     // Free the allocated arrays.
     //delete[] input_fields_pre;
