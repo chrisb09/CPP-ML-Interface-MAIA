@@ -16,7 +16,10 @@ fi
 
 # Install Python
 if [ ! -d "${CPP_ML_ROOT}/extern/python/venv" ]; then
-    source ${CPP_ML_ROOT}/extern/python/install_venv.sh
+    cd ${CPP_ML_ROOT}/extern/python
+    source ./install_venv.sh
+    cd ${CPP_ML_ROOT} 
+    source $CPP_ML_ROOT/extern/python/venv/bin/activate
 else
     source $CPP_ML_ROOT/extern/python/venv/bin/activate
 fi
@@ -41,13 +44,11 @@ if [ ! -f "${CPP_ML_ROOT}/extern/phydll/BUILD-SCOREP/lib/libphydll.so" ]; then
     echo "PhyDLL not found! Installing..."
 
     cd ${CPP_ML_ROOT}/extern/phydll
-    git checkout origin dev
-    git pull origin dev
     mkdir -p BUILD-SCOREP
     
     PATH=$PATH:${CPP_ML_ROOT}/scorep-wrapper \
     CC=scorep-mpicc \
-    SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--user --io=none --nocompiler --memory=none" \
+    SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--user --io=none --nocompiler --memory=none --nocuda" \
     SCOREP_WRAPPER_COMPILER_FLAGS="-g -DSCOREP" \
     #SCOREP_WRAPPER=off \
     make BUILD=${CPP_ML_ROOT}/extern/phydll/BUILD-SCOREP ENABLE_PYTHON=ON
@@ -56,7 +57,7 @@ if [ ! -f "${CPP_ML_ROOT}/extern/phydll/BUILD-SCOREP/lib/libphydll.so" ]; then
     PYTHONPATH=${CPP_ML_ROOT}/extern/phydll/src/python:${PYTHONPATH} \
     PATH=$PATH:${CPP_ML_ROOT}/scorep-wrapper \
     CC=scorep-mpicc \
-    SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--user --io=none --nocompiler  --memory=none" \
+    SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--user --io=none --nocompiler --memory=none --nocuda" \
     SCOREP_WRAPPER_COMPILER_FLAGS="-g -DSCOREP" \
     #SCOREP_WRAPPER=off \
     make BUILD_DIR=${CPP_ML_ROOT}/extern/phydll/BUILD-SCOREP ENABLE_PYTHON=ON TEST_VERBOSE=ON install
@@ -84,12 +85,10 @@ if [ ! -f "${CPP_ML_ROOT}/extern/aixeleratorservice/BUILD-SCOREP/lib/libAIxelera
     fi
     echo "AIxeleratorService not found! Installing..."
 
-    export SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--verbose=0 --nocompiler --user --io=none --memory=none --thread=none"
+    export SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--verbose=0 --nocompiler --user --io=none --memory=none --thread=none --nocuda"
     export SCOREP_WRAPPER_COMPILER_FLAGS="-g -DSCOREP"  
 
     cd ${CPP_ML_ROOT}/extern/aixeleratorservice/
-    git checkout origin tom
-    git pull origin tom
     mkdir -p BUILD-SCOREP && cd BUILD-SCOREP
     
     PATH=$PATH:${CPP_ML_ROOT}/scorep-wrapper \
@@ -130,7 +129,7 @@ fi
 if [ ! -f "${CPP_ML_ROOT}/BUILD-SCOREP/lib/libmlCoupling.so" ]; then
     echo "CPP-ML-Interface not found! Installing..."#
     
-    export SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--verbose=0 --nocompiler --user --mpp=mpi --io=none --memory=none --thread=none"
+    export SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--verbose=0 --nocompiler --user --mpp=mpi --io=none --memory=none --thread=none --nocuda"
     export SCOREP_WRAPPER_COMPILER_FLAGS="-g -DSCOREP"
 
 
