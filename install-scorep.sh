@@ -41,6 +41,8 @@ if [ ! -f "${CPP_ML_ROOT}/extern/phydll/BUILD-SCOREP/lib/libphydll.so" ]; then
     echo "PhyDLL not found! Installing..."
 
     cd ${CPP_ML_ROOT}/extern/phydll
+    git checkout origin dev
+    git pull origin dev
     mkdir -p BUILD-SCOREP
     
     PATH=$PATH:${CPP_ML_ROOT}/scorep-wrapper \
@@ -66,9 +68,11 @@ fi
 
 #Install Torch
 if [ ! -d "${CPP_ML_ROOT}/extern/libtorch" ]; then
+    cd ${CPP_ML_ROOT}/extern
     echo "No libtorch found, downloading now..."
     wget https://download.pytorch.org/libtorch/cu126/libtorch-cxx11-abi-shared-with-deps-2.7.1%2Bcu126.zip
     unzip libtorch-cxx11-abi-shared-with-deps-2.7.1+cu126.zip
+    rm libtorch-cxx11-abi-shared-with-deps-2.7.1+cu126.zip
     echo "Download and unzip finished"
 fi
 
@@ -84,6 +88,8 @@ if [ ! -f "${CPP_ML_ROOT}/extern/aixeleratorservice/BUILD-SCOREP/lib/libAIxelera
     export SCOREP_WRAPPER_COMPILER_FLAGS="-g -DSCOREP"  
 
     cd ${CPP_ML_ROOT}/extern/aixeleratorservice/
+    git checkout origin tom
+    git pull origin tom
     mkdir -p BUILD-SCOREP && cd BUILD-SCOREP
     
     PATH=$PATH:${CPP_ML_ROOT}/scorep-wrapper \
