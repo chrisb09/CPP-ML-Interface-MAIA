@@ -1,11 +1,9 @@
 [submodule "extern/aixeleratorservice"]
 	path = extern/aixeleratorservice
 	url = git@git-ce.rwth-aachen.de:fabian.orland/aixeleratorservice.git
-	branch = tom
 [submodule "extern/phydll"]
 	path = extern/phydll
 	url = git@git-ce.rwth-aachen.de:tomhilgers/phydll.git
-	branch = dev
 [submodule "extern/HighFive"]
 	path = extern/HighFive
 	url = https://github.com/BlueBrain/HighFive
