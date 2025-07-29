@@ -10,9 +10,9 @@ module --ignore_cache load HDF5/1.14.5
 #module --ignore_cache load Szip
 module --ignore_cache load Python/3.12.3
 module --ignore_cache load CMake/4.0.2
-module --ignore_cache load imkl
+module --ignore_cache load imkl/2024.2.0
 
-module --ignore_cache load Score-P/8.4
+module --ignore_cache load Score-P/9.0 #/8.4
 #-CUDA-12.6.3
 
 # for AIxeleratorService

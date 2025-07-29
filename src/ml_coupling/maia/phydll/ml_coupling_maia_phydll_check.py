@@ -1,9 +1,5 @@
-import mpi4py
-mpi4py.rc.thread_level = "funneled"
-
-import mpi4py.MPI as MPI
-
 from pyphydll.pyphydll import PhyDLL
+import mpi4py.MPI as MPI
 import time
 import sys, random, itertools, os
 import numpy as np
@@ -45,6 +41,7 @@ def main():
     dests = dll.get_distribution_info()["dest"]
     num_phy_procs = len(dests)
 
+
     ##################
     # Get Meta Information
     ##################
@@ -53,16 +50,17 @@ def main():
         tmp = np.empty(3, dtype=np.int32)
         globalComm.Recv(tmp, source=dest, tag=dest)
         meta_info_field.append(tmp)
+    
     #General data where no per process differences occur
     sequence_len = 5
     forecast_window = 2
-    checkpoint_path = '/work/thes1961/ai4hpc/checkpoint.pth.tar'    
+    checkpoint_path = '/work/thes1961/retraining/checkpoint.pth.tar'    
     cubeD = 8
 
     #Determine process specific data initially  
     num_cells_per_process = []
     for pid in range(num_phy_procs):
-        num_cells_per_process.append(meta_info_field[pid][2] // sequence_len // field_count) #sequenceLen * nFields * numCubes * cubeSize
+        num_cells_per_process.append(meta_info_field[pid][2] // sequence_len // field_count)
         print(meta_info_field[pid][2])
     ##################
     # GPU device
@@ -153,6 +151,7 @@ def main():
         tm.start("Main")
         #Reshape each chunk into [sequenceLen, vectorLen]
         curr_pos = 0 #Increases by num_cells_per_process[pid] // seqlen
+        nFields = 3
         cubeSize = cubeD**3
         #for pid, flat in enumerate(per_proc_flat_data):
         for pid in range(num_phy_procs):
