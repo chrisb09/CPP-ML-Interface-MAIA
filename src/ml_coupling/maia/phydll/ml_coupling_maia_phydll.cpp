@@ -215,9 +215,19 @@ void MLCouplingMaiaPhyDLL::inference(){
         for(int f = 0; f < nFields; f++){         
             double* ptr = input_fields_pre[t][f].data();  
             std::cout << "Sending " << input_fields_pre[t].size() << " doubles "<< std::endl;
-            couplingStrategy->setField(&ptr, (char*)"Python-DL-FIELD-INPUT-0");
-            couplingStrategy->setField(&ptr, (char*)"Python-DL-FIELD-INPUT-1");
-            couplingStrategy->setField(&ptr, (char*)"Python-DL-FIELD-INPUT-2");
+
+            
+            // Create a writable buffer for the label
+            constexpr int label_size = 128;  // or LL_CHAR if defined
+            char label[label_size] = {0};
+            std::string fieldlabel = "Python-DL-FIELD-INPUT" + std::to_string(f);
+            strncpy(label, fieldlabel.c_str(), label_size - 1);
+            label[label_size - 1] = '\0'; // null terminate to be safe
+            couplingStrategy->setField(&ptr, label); // now label is writable
+
+            //couplingStrategy->setField(&ptr, (char*)"Python-DL-FIELD-INPUT-0");
+            //couplingStrategy->setField(&ptr, (char*)"Python-DL-FIELD-INPUT-1");
+            //couplingStrategy->setField(&ptr, (char*)"Python-DL-FIELD-INPUT-2");
         }   
         couplingStrategy->sendFields();
     }
