@@ -220,7 +220,7 @@ void MLCouplingMaiaPhyDLL::inference(){
             // Create a writable buffer for the label
             constexpr int label_size = 128;  // or LL_CHAR if defined
             char label[label_size] = {0};
-            std::string fieldlabel = "Python-DL-FIELD-INPUT" + std::to_string(f);
+            std::string fieldlabel = "Python-DL-FIELD-INPUT-" + std::to_string(f);
             strncpy(label, fieldlabel.c_str(), label_size - 1);
             label[label_size - 1] = '\0'; // null terminate to be safe
             couplingStrategy->setField(&ptr, label); // now label is writable
@@ -245,7 +245,7 @@ void MLCouplingMaiaPhyDLL::inference(){
         char label[label_size] = {0};
 
         // Initialize the label with the literal string
-        std::string fieldlabel = "Python-DL-FIELD-OUTPUT" + std::to_string(f);
+        std::string fieldlabel = "Python-DL-FIELD-OUTPUT-" + std::to_string(f);
         strncpy(label, fieldlabel.c_str(), label_size - 1);
         label[label_size - 1] = '\0'; // null terminate to be safe
 
