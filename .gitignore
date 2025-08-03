@@ -5,3 +5,4 @@ BUILD-SCOREP
 BUILD-SCOREP-TRACE
 src/ml_coupling/maia/aix/transformer_inference_scripted.pt
 src/ml_coupling/maia/aix/transformer_inference_scripted_new.pt
+src/python_utils/__pycache__/*

@@ -26,6 +26,10 @@ tm = TimerManager()
 
 def main():
     tm.start("Init")
+
+    torch.set_num_threads(int(os.environ.get("OMP_NUM_THREADS", 1)))
+    print(f"Torch Threads: {torch.get_num_threads()}", flush=True)
+
     ##################
     # SETUP COMM 
     ##################
