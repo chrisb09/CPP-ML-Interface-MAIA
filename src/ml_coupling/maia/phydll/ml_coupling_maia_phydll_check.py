@@ -1,5 +1,9 @@
-from pyphydll.pyphydll import PhyDLL
+import mpi4py
+mpi4py.rc.thread_level = "funneled"
+
 import mpi4py.MPI as MPI
+
+from pyphydll.pyphydll import PhyDLL
 import time
 import sys, random, itertools, os
 import numpy as np
@@ -65,7 +69,7 @@ def main():
     num_cells_per_process = []
     for pid in range(num_phy_procs):
         num_cells_per_process.append(meta_info_field[pid][2] // sequence_len // field_count)
-        print(meta_info_field[pid][2])
+        print(f"num_cells_per_process {num_cells_per_process}")
     ##################
     # GPU device
     ##################

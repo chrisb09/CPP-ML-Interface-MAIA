@@ -67,7 +67,7 @@ def main():
     num_cells_per_process = []
     for pid in range(num_phy_procs):
         num_cells_per_process.append(meta_info_field[pid][2] // sequence_len // field_count) #sequenceLen * nFields * numCubes * cubeSize
-        print(meta_info_field[pid][2])
+        print(f"num_cells_per_process {num_cells_per_process}")
     ##################
     # GPU device
     ##################
@@ -99,7 +99,7 @@ def main():
 
     #Load model checkpoint
     loc = {'cuda:%d' % 0: 'cuda:%d' % my_device_id} if torch.cuda.is_available() else "cpu"
-    print(f"Location is {loc}")
+    print(f"Location is {loc}", flush=True)
     try:
         checkpoint = torch.load(checkpoint_path, map_location=loc)
         new_state_dict = {}
