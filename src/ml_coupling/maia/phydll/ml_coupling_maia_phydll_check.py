@@ -202,7 +202,7 @@ def main():
                 )
                 tm.stop("run_inf")
                 
-                out = predictions[1].view(-1).detach().cpu().numpy()
+                out = predictions[0].view(-1).detach().cpu().numpy()
                 out_reshaped = out.reshape(fields, num_cubes, cubeD, cubeD, cubeD)
 
                 # Now flatten cube dims per field back to vector length
