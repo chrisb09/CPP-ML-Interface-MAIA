@@ -55,15 +55,15 @@ def main():
     ##################
     meta_info_field = []
     for i, dest in enumerate(dests):
-        tmp = np.empty(3, dtype=np.int32)
+        tmp = np.empty(4, dtype=np.int32)
         globalComm.Recv(tmp, source=dest, tag=dest)
         meta_info_field.append(tmp)
     
     #General data where no per process differences occur
-    sequence_len = 5
-    forecast_window = 2
+    sequence_len = meta_info_field[0][0]#5
+    forecast_window = meta_info_field[0][3]#2
     checkpoint_path = '/work/thes1961/retraining/checkpoint.pth.tar'    
-    cubeD = 8
+    cubeD = meta_info_field[0][1]#8
 
     #Determine process specific data initially  
     num_cells_per_process = []
@@ -202,7 +202,7 @@ def main():
                 )
                 tm.stop("run_inf")
                 
-                out = predictions[0].view(-1).detach().cpu().numpy()
+                out = predictions[-1].view(-1).detach().cpu().numpy()
                 out_reshaped = out.reshape(fields, num_cubes, cubeD, cubeD, cubeD)
 
                 # Now flatten cube dims per field back to vector length

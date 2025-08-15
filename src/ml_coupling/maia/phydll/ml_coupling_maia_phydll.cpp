@@ -81,10 +81,11 @@ void MLCouplingMaiaPhyDLL::setup(
     #endif
    
     // Meta Info communication
-    int* metaInfo = (int*) malloc(3 * sizeof(int));
+    int* metaInfo = (int*) malloc(4 * sizeof(int));
     metaInfo[0] =  this->inputSeqLen;
     metaInfo[1] =  this->cubeD;
     metaInfo[2] =  this->totalElements;
+    metaInfo[3] =  this->forecastWindow;
 
     int ndest = couplingStrategy->getNDest();
     int* dest = couplingStrategy->getDest();
@@ -96,7 +97,7 @@ void MLCouplingMaiaPhyDLL::setup(
         // Send int metadata
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        MPI_Send(metaInfo, 3, MPI_INT, dest[i], own_rank, MPI_COMM_WORLD);
+        MPI_Send(metaInfo, 4, MPI_INT, dest[i], own_rank, MPI_COMM_WORLD);
         #pragma GCC diagnostic pop
     }
     #ifdef WITH_SCOREP

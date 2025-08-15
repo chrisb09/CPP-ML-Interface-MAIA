@@ -77,7 +77,7 @@ void MLCouplingMaiaAix::setup(
     // Durch scripting erwartet jetzt [batchdim = nfields*numCubes][seqlen = 5][cubeD^3 = 8^3 = 512]
     inputShape = {nFields * numCubes, inputSeqLen, cubeD * cubeD * cubeD};
     // Output ist dann [batchdim = nFields*numCubes][forecastwindow = 2][cubeD^3 = 512]
-    outputShape = {nFields * numCubes, 2, cubeD * cubeD * cubeD};
+    outputShape = {nFields * numCubes, forecastWindow, cubeD * cubeD * cubeD};
     batchSize = inputShape[0]; //Since batch first = True; = nFields * num_cubes
     
     input_fields_pre = new float[totalElements];
@@ -249,7 +249,7 @@ void MLCouplingMaiaAix::postprocess_output(){
     
     // Reconstruct the full volumes directly from the flat output array.
     // The flat array 'output_fields_post' has the layout:
-    //    [batch dimension: (f * numCubes + cube)][time: FORECAST_WINDOW][cubeSize]
+    //    [batch dimension: (f * numCubes + cube)][time: FORECAST_WINDOW][cubeSize] -->Batchfirst is set to true!
     // For each field and each cube, we need the predicted cube from time step FORECAST_WINDOW–1.
     // Since shape is fixed, we can compute offsets directly.
     for (int f = 0; f < nFields; ++f) {
@@ -259,9 +259,9 @@ void MLCouplingMaiaAix::postprocess_output(){
             // The global batch index is f * numCubes + cubeCounter.
             int batch_index = f * numCubes + cubeCounter;
             // Each batch element has FORECAST_WINDOW time steps.
-            // The predicted cube is located at time step FORECAST_WINDOW - 1.
+            // The predicted cube is located at time step FORECAST_WINDOW - 1 (indexing reasons).
             // Therefore, its starting offset in output_fields_post is:
-            int src_offset = ((batch_index * 2) + (2 - 1)) * cubeSize;
+            int src_offset = ((batch_index * forecastWindow) + (forecastWindow - 1)) * cubeSize;
             // Instead of copying cube data into an intermediate vector, add its contribution directly.
             // Pointer arithmetic makes inner loops efficient.
             const float* cubeData = &output_fields_post[src_offset];

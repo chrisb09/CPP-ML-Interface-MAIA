@@ -93,9 +93,9 @@ public:
             ys = linspace(0, nActiveCells[1] - cubeD, concatY);
             zs = linspace(0, nActiveCells[0] - cubeD, concatZ);
         }else{
-            xs = get_full_indices(nActiveCells[2], cubeD, overlap);
-            ys = get_full_indices(nActiveCells[1], cubeD, overlap);
-            zs = get_full_indices(nActiveCells[0], cubeD, overlap);
+            xs = get_full_indices(nActiveCells[2], overlap);
+            ys = get_full_indices(nActiveCells[1], overlap);
+            zs = get_full_indices(nActiveCells[0], overlap);
         }
         xs.insert(xs.begin(), 0);
         ys.insert(ys.begin(), 0);
@@ -178,8 +178,8 @@ protected:
 	int iter = 0;
 
     //Cube relevant data
-    int cubeD = 8;
-    int cubeSize = 512;
+    int cubeD;
+    int cubeSize;
 
     int concatX;
     int concatY;
@@ -209,9 +209,9 @@ protected:
     int forecastWindow;
     int inputStepDistance;
 
-    int overlap = 0;
+    int overlap;
 
-    double scalingFactor = 1.0;
+    double scalingFactor;
 
     std::vector<int> couplingSteps;
 
@@ -235,7 +235,7 @@ protected:
     std::vector<std::vector<double>> extract_cubes(const double* data);
 
     std::vector<int> linspace(int start, int end, int count); 
-    std::vector<int> get_full_indices(int length, int cubeD, int step);
+    std::vector<int> get_full_indices(int length, int step);
 
     void exportCubesToCSV(const std::string& filename);
 };
@@ -279,7 +279,7 @@ inline void MLCouplingMaia<modelIn, modelOut>::setNextInferenceStep(int globalTi
 
 template <typename modelIn, typename modelOut>
 inline int MLCouplingMaia<modelIn, modelOut>::getInferenceIncrement(){
-    return static_cast<int>(std::round(inferenceIncrement * scalingFactor));
+    return static_cast<int>(std::round(inferenceIncrement * scalingFactor * forecastWindow));
 }
 
 template <typename modelIn, typename modelOut>
@@ -355,7 +355,7 @@ inline std::vector<int> MLCouplingMaia<modelIn, modelOut>::linspace(int start, i
  * helper function to calculate overlap like in python
  */
 template <typename modelIn, typename modelOut>
-inline std::vector<int> MLCouplingMaia<modelIn, modelOut>::get_full_indices(int length, int cubeD, int step) {
+inline std::vector<int> MLCouplingMaia<modelIn, modelOut>::get_full_indices(int length, int step) {
     std::vector<int> indices;
     
     // Generate indices spaced by 'step'
