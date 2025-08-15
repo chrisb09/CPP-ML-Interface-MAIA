@@ -279,17 +279,17 @@ inline void MLCouplingMaia<modelIn, modelOut>::setNextInferenceStep(int globalTi
 
 template <typename modelIn, typename modelOut>
 inline int MLCouplingMaia<modelIn, modelOut>::getInferenceIncrement(){
-    return inferenceIncrement * scalingFactor;
+    return static_cast<int>(std::round(inferenceIncrement * scalingFactor));
 }
 
 template <typename modelIn, typename modelOut>
 inline int MLCouplingMaia<modelIn, modelOut>::getInferenceInterval(){
-    return inferenceInterval * scalingFactor;
+    return static_cast<int>(std::round(inferenceInterval * scalingFactor));
 }
 
 template <typename modelIn, typename modelOut>
 inline int MLCouplingMaia<modelIn, modelOut>::getInputStepDistance(){
-    return inputStepDistance * scalingFactor;
+    return static_cast<int>(std::round(inputStepDistance * scalingFactor));
 }
 
 
