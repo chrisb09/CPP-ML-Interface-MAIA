@@ -35,7 +35,12 @@ public:
         int param_interval,
         int param_increment,
         int param_hdfOutputInterval,
-        int param_totalTimesteps
+        int param_totalTimesteps,
+        int param_forecastWindow,
+        int param_inputStepDistance,
+        int param_scalingFactor,
+        int param_overlap,
+        int param_cubeD
     ) override;
 
     MPI_Comm getComm() override;

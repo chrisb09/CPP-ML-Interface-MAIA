@@ -56,20 +56,26 @@ void MLCouplingMaiaAix::setup(
     int param_interval,
     int param_increment,
     int param_hdfOutputInterval,
-    int param_totalTimesteps
+    int param_totalTimesteps,
+    //new ones
+    int param_forecastWindow,
+    int param_inputStepDistance,
+    int param_scalingFactor,
+    int param_overlap,
+    int param_cubeD
 ){
     #ifdef WITH_SCOREP
         SCOREP_USER_REGION_BEGIN(setupRegion, "MLCouplingMaiaAix::setup", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
-    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval, param_totalTimesteps);
+    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval, param_totalTimesteps, param_forecastWindow, param_inputStepDistance, param_scalingFactor, param_overlap, param_cubeD);
 
     // Precompute strides in the original (ghost-including) input.
     yzStride = nCells[1] * nCells[2];
     rowStride = nCells[2];
 
     // Durch scripting erwartet jetzt [batchdim = nfields*numCubes][seqlen = 5][cubeD^3 = 8^3 = 512]
-    inputShape = {nFields * numCubes, sequenceLen, cubeD * cubeD * cubeD};
+    inputShape = {nFields * numCubes, inputSeqLen, cubeD * cubeD * cubeD};
     // Output ist dann [batchdim = nFields*numCubes][forecastwindow = 2][cubeD^3 = 512]
     outputShape = {nFields * numCubes, 2, cubeD * cubeD * cubeD};
     batchSize = inputShape[0]; //Since batch first = True; = nFields * num_cubes
@@ -107,7 +113,7 @@ void MLCouplingMaiaAix::setup(
     for (int f = 0; f < nFields; ++f) {
         for (int c = 0; c < numCubes; ++c) {
             int batch_index = f * numCubes + c;
-            cubeDestBases[batch_index] = batch_index * sequenceLen * cubeSize;
+            cubeDestBases[batch_index] = batch_index * inputSeqLen * cubeSize;
         }
     }
 

@@ -40,7 +40,12 @@ public:
         int param_interval,
         int param_increment,
         int param_hdfOutputInterval,
-        int param_totalTimesteps
+        int param_totalTimesteps,
+        int param_forecastWindow,
+        int param_inputStepDistance,
+        int param_scalingFactor,
+        int param_overlap,
+        int param_cubeD
     ){
         // Setup in/output for CFD
         input_fields.clear();
@@ -55,6 +60,20 @@ public:
         this->nCells = param_nCells;
         this->totalTimesteps = param_totalTimesteps;
 
+        this->inferenceStartStep = param_start;
+        this->inputSeqLen = param_sequenceLen;
+        this->inferenceInterval = param_interval;
+        this->inferenceIncrement = param_increment;
+        this->nextInferenceStep = param_start;
+        this->hdfOutputInterval = param_hdfOutputInterval;
+        this->forecastWindow = param_forecastWindow;
+        this->inputStepDistance = param_inputStepDistance; 
+        this->scalingFactor = param_scalingFactor;
+
+        this->overlap = param_overlap;
+        this->cubeD = param_cubeD;
+        this->cubeSize = this->cubeD*this->cubeD*this->cubeD;
+
         fullFieldCells = std::accumulate(this->nCells.begin(), this->nCells.end(), 1, std::multiplies());
 
         this->nOffsetCells = param_nOffsetCells;
@@ -66,29 +85,33 @@ public:
         nActiveCells[2] = this->nCells[2] - 2 * this->nGhostLayers;
         activeFieldCells = std::accumulate(nActiveCells.begin(), nActiveCells.end(), 1,  std::multiplies());
         
-        concatX = (nActiveCells[2] + cubeD - 1) / cubeD;
+        concatX = (nActiveCells[2] + cubeD - 1) / cubeD;//+cubeD for round up
         concatY = (nActiveCells[1] + cubeD - 1) / cubeD;
         concatZ = (nActiveCells[0] + cubeD - 1) / cubeD;
-
-        xs = linspace(0, nActiveCells[2] - cubeD, concatX);
-        ys = linspace(0, nActiveCells[1] - cubeD, concatY);
-        zs = linspace(0, nActiveCells[0] - cubeD, concatZ);
+        if (this->overlap == 0) {
+            xs = linspace(0, nActiveCells[2] - cubeD, concatX);
+            ys = linspace(0, nActiveCells[1] - cubeD, concatY);
+            zs = linspace(0, nActiveCells[0] - cubeD, concatZ);
+        }else{
+            xs = get_full_indices(nActiveCells[2], cubeD, overlap);
+            ys = get_full_indices(nActiveCells[1], cubeD, overlap);
+            zs = get_full_indices(nActiveCells[0], cubeD, overlap);
+        }
         xs.insert(xs.begin(), 0);
         ys.insert(ys.begin(), 0);
         zs.insert(zs.begin(), 0);  
 
         numCubes = zs.size() * ys.size() * xs.size();
-        totalElements = sequenceLen * nFields * numCubes * cubeSize;
+        totalElements = inputSeqLen * nFields * numCubes * cubeSize;
 
-        //Setup ML Metadata
-        inferenceStartStep = param_start;
-        inputSeqLen = param_sequenceLen;
-        inferenceInterval = param_interval;
-        inferenceIncrement = param_increment;
-        nextInferenceStep = param_start;
-        hdfOutputInterval = param_hdfOutputInterval;
-        if(param_start < (param_sequenceLen - 1)){
-            std::cerr << "m-AIA ERROR: inference start step cannot be smaller than input sequence length of the transformer model!" << "\n";
+
+        if(inferenceStartStep < (inputSeqLen - 1)){
+            std::cerr << "m-AIA ERROR: inference start step (" << inferenceStartStep << ") cannot be smaller than input sequence length (" << inputSeqLen << ") of the transformer model!" << "\n";
+        }
+
+        
+        if(inferenceInterval < ((inputSeqLen-1) * inputStepDistance)){
+            std::cerr << "m-AIA ERROR: inference interval (" << inferenceInterval << ") cannot be smaller than inputSeqLen * mlInputStepDistance (" << inputStepDistance << ")!" << "\n";
         }
     }
     
@@ -104,7 +127,7 @@ public:
         
         //With this we ensure that we gather seqLen (4) timesteps and only then infer
         preprocess_input();   
-        if (iter < sequenceLen-1) {
+        if (iter < inputSeqLen-1) {//Only gets called if coupling step
             iter++;
         }else{
             inference();
@@ -132,14 +155,13 @@ public:
     virtual MPI_Comm getComm() = 0;
 
     int getNextInferenceStep();
-    void setNextInferenceStep(int nextGlobalInferenceStep, int nextInferStep);
+    void setNextInferenceStep(int globalTimeStep, int logicalTimeStep);
     int getInferenceIncrement();
     int getInferenceInterval();
+    int getInputStepDistance();
     bool isCouplingStep(int step);
     bool isInferenceStep(int step);
     void writeUVWFieldsToH5(double* uField, double* vField, double* wField, std::vector<int> write_nCells, std::vector<int> write_nOffsetCells, std::string outputFile);
-
-    void calculateMetrics();
 protected:
     //Communication
     MPI_Comm app_comm = MPI_COMM_WORLD;
@@ -153,12 +175,11 @@ protected:
     int totalTimesteps;
 
     //Timestep data
-	int sequenceLen = 5;
 	int iter = 0;
 
     //Cube relevant data
-    static constexpr int cubeD = 8;
-    static constexpr int cubeSize = cubeD * cubeD * cubeD;
+    int cubeD = 8;
+    int cubeSize = 512;
 
     int concatX;
     int concatY;
@@ -185,6 +206,14 @@ protected:
     int inferenceIncrement;
     int nextInferenceStep;
     int hdfOutputInterval;
+    int forecastWindow;
+    int inputStepDistance;
+
+    int overlap = 0;
+
+    double scalingFactor = 1.0;
+
+    std::vector<int> couplingSteps;
 
     bool firstMLStep = true;
     bool finalized = false;
@@ -206,6 +235,7 @@ protected:
     std::vector<std::vector<double>> extract_cubes(const double* data);
 
     std::vector<int> linspace(int start, int end, int count); 
+    std::vector<int> get_full_indices(int length, int cubeD, int step);
 
     void exportCubesToCSV(const std::string& filename);
 };
@@ -220,39 +250,56 @@ inline MLCouplingMaia<modelIn, modelOut>::~MLCouplingMaia() {
 }
 
 
-
 template <typename modelIn, typename modelOut>
 inline int MLCouplingMaia<modelIn, modelOut>::getNextInferenceStep(){
   return nextInferenceStep;
 }
 
 template <typename modelIn, typename modelOut>
-inline void MLCouplingMaia<modelIn, modelOut>::setNextInferenceStep(int nextGlobalInferenceStep, int nextInferStep){
-  if (nextInferStep + inferenceIncrement >= totalTimesteps){ //Letzter Timestep darf nicht übersprungen werden
-    nextInferenceStep = totalTimesteps + 5;
-  }else if (nextGlobalInferenceStep%hdfOutputInterval > 0 && nextGlobalInferenceStep%hdfOutputInterval < (hdfOutputInterval-inferenceIncrement)){ 
-    nextInferenceStep = nextInferStep;
-  }else{//HDF outputs dürfen nicht übersprungen werden
-    nextInferenceStep = nextInferStep + (hdfOutputInterval - ((nextGlobalInferenceStep - 1) % hdfOutputInterval));//Moves nextInfer to 1001 (in terms of global not logical)
-  }
+inline void MLCouplingMaia<modelIn, modelOut>::setNextInferenceStep(int globalTimeStep, int logicalTimeStep){
+    int nextInferStep = logicalTimeStep + getInferenceInterval() + 1; //+1 because we cant set the first coupling step to the current one, maia couldnt send the data
+    int nextGlobalInferenceStep = globalTimeStep + getInferenceInterval() + 1;
+
+    couplingSteps.clear(); // Empty coupling steps
+    if (nextInferStep + getInferenceIncrement() >= totalTimesteps){ //Letzter Timestep darf nicht übersprungen werden
+        nextInferenceStep = totalTimesteps + 1; 
+        //No coupling steps!
+    }else if (nextGlobalInferenceStep%hdfOutputInterval > 0 && nextGlobalInferenceStep%hdfOutputInterval < (hdfOutputInterval-getInferenceIncrement())){ 
+        nextInferenceStep = nextInferStep;
+        for (int i = 0; i < inputSeqLen; i++){
+            couplingSteps.push_back(logicalTimeStep + (i * getInputStepDistance()) + 1); //+1 because we cant set the first coupling step to the current one, maia couldnt send the data
+        }
+    }else{//HDF outputs dürfen nicht übersprungen werden
+        nextInferenceStep = nextInferStep + (hdfOutputInterval - ((nextGlobalInferenceStep - 1) % hdfOutputInterval));//Moves nextInfer to 1001 (in terms of global not logical)
+        for (int i = 0; i < inputSeqLen; i++){
+            couplingSteps.push_back(nextInferenceStep - (i * getInputStepDistance())); // Calculate backwards since infer was pushed!
+        }
+    }
 }
 
 template <typename modelIn, typename modelOut>
 inline int MLCouplingMaia<modelIn, modelOut>::getInferenceIncrement(){
-  return inferenceIncrement;
+    return inferenceIncrement * scalingFactor;
 }
 
 template <typename modelIn, typename modelOut>
 inline int MLCouplingMaia<modelIn, modelOut>::getInferenceInterval(){
-  return inferenceInterval;
+    return inferenceInterval * scalingFactor;
 }
 
 template <typename modelIn, typename modelOut>
+inline int MLCouplingMaia<modelIn, modelOut>::getInputStepDistance(){
+    return inputStepDistance * scalingFactor;
+}
+
+
+template <typename modelIn, typename modelOut>
 inline bool MLCouplingMaia<modelIn, modelOut>::isCouplingStep(int step){
-  if((step >= (nextInferenceStep - (inputSeqLen - 1))) && (step <= nextInferenceStep)){
-    return true;
-  }
-  return false;
+  //if((step >= (nextInferenceStep - (inputSeqLen - 1))) && (step <= nextInferenceStep)){
+    if(std::find(couplingSteps.begin(), couplingSteps.end(), step) != couplingSteps.end()){
+        return true;
+    }
+    return false;
 }
 
 template <typename modelIn, typename modelOut>
@@ -303,6 +350,28 @@ inline std::vector<int> MLCouplingMaia<modelIn, modelOut>::linspace(int start, i
     }
     return result;
 }
+
+/**
+ * helper function to calculate overlap like in python
+ */
+template <typename modelIn, typename modelOut>
+inline std::vector<int> MLCouplingMaia<modelIn, modelOut>::get_full_indices(int length, int cubeD, int step) {
+    std::vector<int> indices;
+    
+    // Generate indices spaced by 'step'
+    for (int i = 0; i <= length - cubeD; i += step) {
+        indices.push_back(i);
+    }
+
+    // Ensure the last index covers the final 'cubeD' cells
+    if (!indices.empty() && indices.back() != (length - cubeD)) {
+        indices.push_back(length - cubeD);
+    }
+
+    return indices;
+}
+
+
 
 /**
  * Debug function to write cube data to csv
@@ -414,12 +483,6 @@ inline void MLCouplingMaia<modelIn, modelOut>::writeUVWFieldsToH5(double* uField
 
   dataset_num_cells.write((int*)write_nCells.data()); 
   dataset_offsets.write((int*)write_nOffsetCells.data()); 
-}
-
-
-template <typename modelIn, typename modelOut>
-inline void MLCouplingMaia<modelIn, modelOut>::calculateMetrics(){
-
 }
 
 #endif // ML_COUPLING_MAIA_HPP

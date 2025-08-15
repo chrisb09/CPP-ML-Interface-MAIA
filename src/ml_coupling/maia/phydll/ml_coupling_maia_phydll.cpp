@@ -58,14 +58,20 @@ void MLCouplingMaiaPhyDLL::setup(
     int param_interval,
     int param_increment,
     int param_hdfOutputInterval,
-    int param_totalTimesteps
+    int param_totalTimesteps,
+    //new ones
+    int param_forecastWindow,
+    int param_inputStepDistance,
+    int param_scalingFactor,
+    int param_overlap,
+    int param_cubeD
 ){
     #ifdef WITH_SCOREP
         SCOREP_USER_REGION_BEGIN(setupRegion, "MLCouplingMaiaPhyDLL::setup", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
     // Setup internal base class variables
-    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval, param_totalTimesteps);
+    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval, param_totalTimesteps, param_forecastWindow, param_inputStepDistance, param_scalingFactor, param_overlap, param_cubeD);
 
     // Setup PhyDLL comm
     couplingStrategy->setup(true, 1, 1, nFields, numCubes * cubeSize);
@@ -76,7 +82,7 @@ void MLCouplingMaiaPhyDLL::setup(
    
     // Meta Info communication
     int* metaInfo = (int*) malloc(3 * sizeof(int));
-    metaInfo[0] =  this->sequenceLen;
+    metaInfo[0] =  this->inputSeqLen;
     metaInfo[1] =  this->cubeD;
     metaInfo[2] =  this->totalElements;
 
@@ -211,7 +217,7 @@ void MLCouplingMaiaPhyDLL::inference(){
     #endif
 
     // input_fields_pre: [sequenceLen][field][numCubes * cubeD³]
-    for (int t = 0; t < sequenceLen; ++t) { 
+    for (int t = 0; t < inputSeqLen; ++t) { 
         for(int f = 0; f < nFields; f++){         
             double* ptr = input_fields_pre[t][f].data();  
             std::cout << "Sending " << input_fields_pre[t].size() << " doubles "<< std::endl;
