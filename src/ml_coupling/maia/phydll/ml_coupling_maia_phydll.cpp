@@ -62,7 +62,7 @@ void MLCouplingMaiaPhyDLL::setup(
     //new ones
     int param_forecastWindow,
     int param_inputStepDistance,
-    int param_scalingFactor,
+    double param_scalingFactor,
     int param_overlap,
     int param_cubeD
 ){
