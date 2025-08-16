@@ -262,8 +262,8 @@ inline int MLCouplingMaia<modelIn, modelOut>::getNextInferenceStep(){
 
 template <typename modelIn, typename modelOut>
 inline void MLCouplingMaia<modelIn, modelOut>::setNextInferenceStep(int globalTimeStep, int logicalTimeStep){
-    int nextInferStep = logicalTimeStep + getInferenceInterval() + 1; //+1 because we cant set the first coupling step to the current one, maia couldnt send the data
-    int nextGlobalInferenceStep = globalTimeStep + getInferenceInterval() + 1;
+    int nextInferStep = logicalTimeStep + getInferenceInterval();
+    int nextGlobalInferenceStep = globalTimeStep + getInferenceInterval();
 
     couplingSteps.clear(); // Empty coupling steps
     if (nextInferStep + getInferenceIncrement() >= totalTimesteps){ //Letzter Timestep darf nicht übersprungen werden
