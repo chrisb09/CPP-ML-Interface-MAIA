@@ -64,7 +64,9 @@ public:
         this->inputSeqLen = param_sequenceLen;
         this->inferenceInterval = param_interval;
         this->inferenceIncrement = param_increment;
+
         this->nextInferenceStep = param_start;
+
         this->hdfOutputInterval = param_hdfOutputInterval;
         this->forecastWindow = param_forecastWindow;
         this->inputStepDistance = param_inputStepDistance; 
@@ -104,13 +106,16 @@ public:
         numCubes = zs.size() * ys.size() * xs.size();
         totalElements = inputSeqLen * nFields * numCubes * cubeSize;
 
+        for (int i = 0; i < inputSeqLen; i++){
+            couplingSteps.push_back(nextInferenceStep - (i * getInputStepDistance())); // Calculate backwards since infer was pushed!
+        }
 
         if(inferenceStartStep < (inputSeqLen - 1)){
             std::cerr << "m-AIA ERROR: inference start step (" << inferenceStartStep << ") cannot be smaller than input sequence length (" << inputSeqLen << ") of the transformer model!" << "\n";
         }
 
         
-        if(inferenceInterval < ((inputSeqLen-1) * inputStepDistance)){
+        if(inferenceInterval < ((inputSeqLen-1) * getInputStepDistance())){ //Dont have to check with add of increment since we always start the next step computation after the increment
             std::cerr << "m-AIA ERROR: inference interval (" << inferenceInterval << ") cannot be smaller than inputSeqLen * mlInputStepDistance (" << inputStepDistance << ")!" << "\n";
         }
     }
@@ -267,7 +272,7 @@ inline void MLCouplingMaia<modelIn, modelOut>::setNextInferenceStep(int globalTi
     }else if (nextGlobalInferenceStep%hdfOutputInterval > 0 && nextGlobalInferenceStep%hdfOutputInterval < (hdfOutputInterval-getInferenceIncrement())){ 
         nextInferenceStep = nextInferStep;
         for (int i = 0; i < inputSeqLen; i++){
-            couplingSteps.push_back(logicalTimeStep + (i * getInputStepDistance()) + 1); //+1 because we cant set the first coupling step to the current one, maia couldnt send the data
+            couplingSteps.push_back(nextInferenceStep - (i * getInputStepDistance()));
         }
     }else{//HDF outputs dürfen nicht übersprungen werden
         nextInferenceStep = nextInferStep + (hdfOutputInterval - ((nextGlobalInferenceStep - 1) % hdfOutputInterval));//Moves nextInfer to 1001 (in terms of global not logical)
@@ -284,7 +289,7 @@ inline int MLCouplingMaia<modelIn, modelOut>::getInferenceIncrement(){
 
 template <typename modelIn, typename modelOut>
 inline int MLCouplingMaia<modelIn, modelOut>::getInferenceInterval(){
-    return static_cast<int>(std::round(inferenceInterval * scalingFactor));
+    return inferenceInterval; //No scaling since this is actually something we want to set fixed and is not dependent on the model
 }
 
 template <typename modelIn, typename modelOut>
