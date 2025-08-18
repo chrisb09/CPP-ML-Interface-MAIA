@@ -45,7 +45,8 @@ public:
         int param_inputStepDistance,
         double param_scalingFactor,
         int param_overlap,
-        int param_cubeD
+        int param_cubeD,
+        bool param_permute_order_yzx
     ){
         // Setup in/output for CFD
         input_fields.clear();
@@ -80,6 +81,8 @@ public:
 
         this->nOffsetCells = param_nOffsetCells;
         this->nGhostLayers = param_nGhostLayers;
+
+        this->permute_order_yzx = param_permute_order_yzx;
 
         nActiveCells.resize(3);
         nActiveCells[0] = this->nCells[0] - 2 * this->nGhostLayers;
@@ -213,6 +216,8 @@ protected:
     int hdfOutputInterval;
     int forecastWindow;
     int inputStepDistance;
+
+    bool permute_order_yzx;
 
     int overlap;
 

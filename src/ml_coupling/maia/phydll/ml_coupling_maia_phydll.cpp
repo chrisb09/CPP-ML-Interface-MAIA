@@ -64,14 +64,15 @@ void MLCouplingMaiaPhyDLL::setup(
     int param_inputStepDistance,
     double param_scalingFactor,
     int param_overlap,
-    int param_cubeD
+    int param_cubeD,
+    bool param_permute_order_yzx
 ){
     #ifdef WITH_SCOREP
         SCOREP_USER_REGION_BEGIN(setupRegion, "MLCouplingMaiaPhyDLL::setup", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
     // Setup internal base class variables
-    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval, param_totalTimesteps, param_forecastWindow, param_inputStepDistance, param_scalingFactor, param_overlap, param_cubeD);
+    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval, param_totalTimesteps, param_forecastWindow, param_inputStepDistance, param_scalingFactor, param_overlap, param_cubeD, param_permute_order_yzx);
 
     // Setup PhyDLL comm
     couplingStrategy->setup(true, 1, 1, nFields, numCubes * cubeSize);
@@ -131,24 +132,48 @@ void MLCouplingMaiaPhyDLL::setup(
 
     cubeVolumeIndices.resize(numCubes); // numCubes = zs.size() * ys.size() * xs.size()
     int cubeIndex = 0;
-    for (int z0 : zs) {
+    if (permute_order_yzx == true){
         for (int y0 : ys) {
-            for (int x0 : xs) {
-                // For each cube, precompute the mapping from local cube index to full volume index.
-                std::vector<int> mapping(cubeSize);
-                int localIdx = 0;
-                for (int dz = 0; dz < cubeD; ++dz) {
-                    int global_z = z0 + dz + nGhostLayers;
+            for (int z0 : zs) {
+                for (int x0 : xs) {
+                    // For each cube, precompute the mapping from local cube index to full volume index.
+                    std::vector<int> mapping(cubeSize);
+                    int localIdx = 0;
                     for (int dy = 0; dy < cubeD; ++dy) {
                         int global_y = y0 + dy + nGhostLayers;
-                        for (int dx = 0; dx < cubeD; ++dx) {
-                            int global_x = x0 + dx + nGhostLayers;
-                            mapping[localIdx++] = global_z * (nCells[1] * nCells[2])
-                                + global_y * nCells[2] + global_x;
+                        for (int dz = 0; dz < cubeD; ++dz) {
+                            int global_z = z0 + dz + nGhostLayers;
+                            for (int dx = 0; dx < cubeD; ++dx) {
+                                int global_x = x0 + dx + nGhostLayers;
+                                mapping[localIdx++] = global_z * (nCells[1] * nCells[2])
+                                    + global_y * nCells[2] + global_x;
+                            }
                         }
                     }
+                    cubeVolumeIndices[cubeIndex++] = std::move(mapping);
                 }
-                cubeVolumeIndices[cubeIndex++] = std::move(mapping);
+            }
+        }
+    }else{
+        for (int z0 : zs) {
+            for (int y0 : ys) {
+                for (int x0 : xs) {
+                    // For each cube, precompute the mapping from local cube index to full volume index.
+                    std::vector<int> mapping(cubeSize);
+                    int localIdx = 0;
+                    for (int dz = 0; dz < cubeD; ++dz) {
+                        int global_z = z0 + dz + nGhostLayers; // n:n+a (a is cubeD) while ignoring ghostlayers (which were removed from zs construction)
+                        for (int dy = 0; dy < cubeD; ++dy) {
+                            int global_y = y0 + dy + nGhostLayers; // m:m+a
+                            for (int dx = 0; dx < cubeD; ++dx) {
+                                int global_x = x0 + dx + nGhostLayers; // p:p+a
+                                mapping[localIdx++] = global_z * (nCells[1] * nCells[2])
+                                    + global_y * nCells[2] + global_x;
+                            }
+                        }
+                    }
+                    cubeVolumeIndices[cubeIndex++] = std::move(mapping);
+                }
             }
         }
     }
@@ -203,7 +228,7 @@ void MLCouplingMaiaPhyDLL::preprocess_input(){
             int outOffset = cube * cubeSize;
             const std::vector<int>& mapping = cubeVolumeIndices[cube];
             for (int j = 0; j < cubeSize; ++j) {
-                input_fields_pre[iter][f][outOffset + j] = input_fields[f][mapping[j]];
+                input_fields_pre[iter][f][outOffset + j] = input_fields[f][mapping[j]]; // must be z,y,x or y,z,x per cube
             }
         }
     }

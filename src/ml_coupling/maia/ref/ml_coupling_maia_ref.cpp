@@ -40,10 +40,11 @@ void MLCouplingMaiaRef::setup(
     int param_inputStepDistance,
     double param_scalingFactor,
     int param_overlap,
-    int param_cubeD
+    int param_cubeD,
+    bool param_permute_order_yzx
 ){
     // Setup internal base class variables
-    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval, param_totalTimesteps, param_forecastWindow, param_inputStepDistance, param_scalingFactor, param_overlap, param_cubeD);
+    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval, param_totalTimesteps, param_forecastWindow, param_inputStepDistance, param_scalingFactor, param_overlap, param_cubeD, param_permute_order_yzx);
 }
 
 MPI_Comm MLCouplingMaiaRef::getComm() {
