@@ -98,9 +98,9 @@ public:
             ys = linspace(0, nActiveCells[1] - cubeD, concatY);
             zs = linspace(0, nActiveCells[0] - cubeD, concatZ);
         }else{
-            xs = get_full_indices(nActiveCells[2], overlap);
-            ys = get_full_indices(nActiveCells[1], overlap);
-            zs = get_full_indices(nActiveCells[0], overlap);
+            xs = get_full_indices(nActiveCells[2], cubeD - overlap);
+            ys = get_full_indices(nActiveCells[1], cubeD - overlap);
+            zs = get_full_indices(nActiveCells[0], cubeD - overlap);
         }
         xs.insert(xs.begin(), 0);
         ys.insert(ys.begin(), 0);
