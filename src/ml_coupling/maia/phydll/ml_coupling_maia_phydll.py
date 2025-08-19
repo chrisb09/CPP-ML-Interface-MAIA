@@ -54,7 +54,7 @@ def main():
     ##################
     meta_info_field = []
     for i, dest in enumerate(dests):
-        tmp = np.empty(4, dtype=np.int32)
+        tmp = np.empty(4, dtype=np.int64)
         globalComm.Recv(tmp, source=dest, tag=dest)
         meta_info_field.append(tmp)
     #General data where no per process differences occur
@@ -67,7 +67,8 @@ def main():
     num_cells_per_process = []
     for pid in range(num_phy_procs):
         num_cells_per_process.append(meta_info_field[pid][2] // sequence_len // field_count) #sequenceLen * nFields * numCubes * cubeSize
-        print(f"num_cells_per_process {num_cells_per_process}")
+        print(f"num_cells_per_process {num_cells_per_process[pid]}")
+        print(f"numcubes for proc {pid}: {num_cells_per_process[pid]//cubeSize}")
     ##################
     # GPU device
     ##################
@@ -136,7 +137,6 @@ def main():
         fields = dll.recv()
         
         split_points = np.cumsum(num_cells_per_process)[:-1]
-        
         # pid
         proc_chunks0 = np.split(fields["Python-DL-FIELD-INPUT-0"], split_points)
         proc_chunks1 = np.split(fields["Python-DL-FIELD-INPUT-1"], split_points)

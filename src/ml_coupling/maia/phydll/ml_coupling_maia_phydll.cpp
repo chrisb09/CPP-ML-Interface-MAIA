@@ -12,6 +12,7 @@
 #include <numeric>
 #include <fstream>
 #include <sstream>
+#include <cstdint>
 
 #ifdef WITH_SCOREP
 #include <scorep/SCOREP_User.h>
@@ -82,11 +83,11 @@ void MLCouplingMaiaPhyDLL::setup(
     #endif
    
     // Meta Info communication
-    int* metaInfo = (int*) malloc(4 * sizeof(int));
-    metaInfo[0] =  this->inputSeqLen;
-    metaInfo[1] =  this->cubeD;
+    int64_t* metaInfo = (int64_t*) malloc(4 * sizeof(int64_t));
+    metaInfo[0] =  static_cast<int64_t>(this->inputSeqLen);
+    metaInfo[1] =  static_cast<int64_t>(this->cubeD);
     metaInfo[2] =  this->totalElements;
-    metaInfo[3] =  this->forecastWindow;
+    metaInfo[3] =  static_cast<int64_t>(this->forecastWindow);
 
     int ndest = couplingStrategy->getNDest();
     int* dest = couplingStrategy->getDest();
@@ -98,9 +99,10 @@ void MLCouplingMaiaPhyDLL::setup(
         // Send int metadata
         #pragma GCC diagnostic push
         #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-        MPI_Send(metaInfo, 4, MPI_INT, dest[i], own_rank, MPI_COMM_WORLD);
+        MPI_Send(metaInfo, 4, MPI_INT64_T, dest[i], own_rank, MPI_COMM_WORLD);
         #pragma GCC diagnostic pop
     }
+    free(metaInfo);
     #ifdef WITH_SCOREP
         SCOREP_USER_REGION_END(metaInfoComm);
     #endif
@@ -219,13 +221,12 @@ void MLCouplingMaiaPhyDLL::preprocess_input(){
     if (input_fields_pre.size() != 5){
         input_fields_pre.resize(5);
     }   
-
     input_fields_pre[iter].resize(nFields);
     for (int f = 0; f < nFields; ++f) {
-        input_fields_pre[iter][f].resize(numCubes * cubeSize);
+        input_fields_pre[iter][f].resize(static_cast<int64_t>(numCubes) * cubeSize);
         // For each cube, copy data using precomputed mapping.
         for (size_t cube = 0; cube < cubeVolumeIndices.size(); ++cube) {
-            int outOffset = cube * cubeSize;
+            int64_t outOffset = cube * static_cast<int64_t>(cubeSize);
             const std::vector<int>& mapping = cubeVolumeIndices[cube];
             for (int j = 0; j < cubeSize; ++j) {
                 input_fields_pre[iter][f][outOffset + j] = input_fields[f][mapping[j]]; // must be z,y,x or y,z,x per cube
