@@ -68,7 +68,7 @@ def main():
     for pid in range(num_phy_procs):
         num_cells_per_process.append(meta_info_field[pid][2] // sequence_len // field_count) #sequenceLen * nFields * numCubes * cubeSize
         print(f"num_cells_per_process {num_cells_per_process[pid]}")
-        print(f"numcubes for proc {pid}: {num_cells_per_process[pid]//cubeSize}")
+        print(f"numcubes for proc {pid}: {num_cells_per_process[pid]//(cubeD**3)}")
     ##################
     # GPU device
     ##################
@@ -172,7 +172,7 @@ def main():
             fields_data = np.stack(fields_data, axis=0)  # shape: [fields, seq_len, num_cubes, cubeD, cubeD, cubeD]
             
             # Permute axes so fields is after seq_len: (seq_len, fields, num_cubes, cubeD, cubeD, cubeD)
-            fields_data = np.transpose(fields_data, (1, 0, 2, 3, 4, 5))
+            fields_data = np.transpose(fields_data, (1, 0, 3, 2, 4, 5))
             
             # Flatten cube dims + fields dimension into feature dim: 
             # new shape: (seq_len, num_cubes, fields * cubeD * cubeD * cubeD)
@@ -192,7 +192,7 @@ def main():
                 predictions = run_encoder_decoder_inference_fixed(
                     device=device,
                     model=model,
-                    src=inputs,
+                    inputs=inputs,
                     forecast_window=forecast_window,
                     batch_size=inputs.shape[1],
                     batch_first=False
@@ -200,7 +200,7 @@ def main():
                 tm.stop("run_inf")
                 
                 out = predictions[-1].view(-1).detach().cpu().numpy()
-                out_reshaped = out.reshape(fields, num_cubes, cubeD, cubeD, cubeD)
+                out_reshaped = out.reshape(fields, num_cubes, cubeD, cubeD, cubeD).permute((0,1,3,2,4))
 
                 # Now flatten cube dims per field back to vector length
                 # Each field data will be shape: (num_cubes * cubeD^3) == vectorLen

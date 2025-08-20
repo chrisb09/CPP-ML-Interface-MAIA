@@ -266,7 +266,13 @@ class TransformerInferenceWrapper(nn.Module):
             dim_b = src.size(0)
         tgt_mask = generate_square_subsequent_mask(device, dim_a, dim_a)
         src_mask = generate_square_subsequent_mask(device, dim_a, dim_b)
-        return self.model(src, tgt, src_mask, tgt_mask)
+
+        out = self.model(src, tgt, src_mask, tgt_mask)
+        if self.batch_first:
+            out = out[:, -self.forecast_window:, :]
+        else:
+            out = out[-self.forecast_window:, :, :]
+        return out
 
 
 ########################################

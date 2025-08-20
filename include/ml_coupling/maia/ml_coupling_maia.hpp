@@ -45,8 +45,7 @@ public:
         int param_inputStepDistance,
         double param_scalingFactor,
         int param_overlap,
-        int param_cubeD,
-        bool param_permute_order_yzx
+        int param_cubeD
     ){
         // Setup in/output for CFD
         input_fields.clear();
@@ -67,7 +66,6 @@ public:
         this->inferenceIncrement = param_increment;
 
         this->nextInferenceStep = param_start;
-        std::cout << "nextinfer" << this->nextInferenceStep << std::endl;
 
         this->hdfOutputInterval = param_hdfOutputInterval;
         this->forecastWindow = param_forecastWindow;
@@ -83,7 +81,6 @@ public:
         this->nOffsetCells = param_nOffsetCells;
         this->nGhostLayers = param_nGhostLayers;
 
-        this->permute_order_yzx = param_permute_order_yzx;
 
         nActiveCells.resize(3);
         nActiveCells[0] = this->nCells[0] - 2 * this->nGhostLayers;
@@ -91,12 +88,10 @@ public:
         nActiveCells[2] = this->nCells[2] - 2 * this->nGhostLayers;
         activeFieldCells = std::accumulate(nActiveCells.begin(), nActiveCells.end(), 1,  std::multiplies());
         
-        concatX = std::ceil(nActiveCells[2] / cubeD);
-        concatY = std::ceil(nActiveCells[1] / cubeD);
-        concatZ = std::ceil(nActiveCells[0] / cubeD);
-        std::cout << "ConcatX" << concatX << std::endl;
-        std::cout << "ConcatY" << concatY << std::endl;
-        std::cout << "ConcatZ" << concatZ << std::endl;
+        concatX = static_cast<int>(std::ceil(static_cast<double>(nActiveCells[2]) / cubeD));
+        concatY = static_cast<int>(std::ceil(static_cast<double>(nActiveCells[1]) / cubeD));
+        concatZ = static_cast<int>(std::ceil(static_cast<double>(nActiveCells[0]) / cubeD));
+        
         if (this->overlap == 0) {
             xs = linspace(0, nActiveCells[2] - cubeD, concatX);
             ys = linspace(0, nActiveCells[1] - cubeD, concatY);
@@ -109,9 +104,6 @@ public:
         xs.insert(xs.begin(), 0);
         ys.insert(ys.begin(), 0);
         zs.insert(zs.begin(), 0);  
-        std::cout << "xs size" << xs.size() << std::endl;
-        std::cout << "ys size" << ys.size() << std::endl;
-        std::cout << "zs size" << zs.size() << std::endl;
 
         numCubes = zs.size() * ys.size() * xs.size();
         totalElements = static_cast<int64_t>(inputSeqLen) * static_cast<int64_t>(nFields) * static_cast<int64_t>(numCubes) * static_cast<int64_t>(cubeSize);
@@ -223,8 +215,6 @@ protected:
     int hdfOutputInterval;
     int forecastWindow;
     int inputStepDistance;
-
-    bool permute_order_yzx;
 
     int overlap;
 

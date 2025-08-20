@@ -41,8 +41,7 @@ public:
         int param_inputStepDistance,
         double param_scalingFactor,
         int param_overlap,
-        int param_cubeD,
-        bool param_permute_order_yzx
+        int param_cubeD
     ) override;
 
     MPI_Comm getComm() override;

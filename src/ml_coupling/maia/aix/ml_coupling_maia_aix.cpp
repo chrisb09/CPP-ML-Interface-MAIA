@@ -62,14 +62,13 @@ void MLCouplingMaiaAix::setup(
     int param_inputStepDistance,
     double param_scalingFactor,
     int param_overlap,
-    int param_cubeD,
-    bool param_permute_order_yzx
+    int param_cubeD
 ){
     #ifdef WITH_SCOREP
         SCOREP_USER_REGION_BEGIN(setupRegion, "MLCouplingMaiaAix::setup", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
-    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval, param_totalTimesteps, param_forecastWindow, param_inputStepDistance, param_scalingFactor, param_overlap, param_cubeD, param_permute_order_yzx);
+    MLCouplingMaia::setup(input_fields_ptr, output_fields_ptr, param_model_path, param_nCells, param_nOffsetCells, param_nGhostLayers, param_start, param_sequenceLen, param_interval, param_increment, param_hdfOutputInterval, param_totalTimesteps, param_forecastWindow, param_inputStepDistance, param_scalingFactor, param_overlap, param_cubeD);
 
     // Precompute strides in the original (ghost-including) input.
     yzStride = nCells[1] * nCells[2];
@@ -96,33 +95,19 @@ void MLCouplingMaiaAix::setup(
 
     cubeSrcBases.resize(numCubes);
     int idx = 0;
-    if (permute_order_yzx == true){
+    for (int z0 : zs) {
         for (int y0 : ys) {
-            for (int z0 : zs) {
-                for (int x0 : xs) {
-                    // For a cube starting at (x0, y0, z0) in the trimmed region,
-                    // the corresponding global (input_fields) base offset is:
-                    int base = ( (z0 + nGhostLayers) * yzStride ) +
-                            ( (y0 + nGhostLayers) * nCells[2] ) +
-                            ( x0 + nGhostLayers );
-                    cubeSrcBases[idx++] = base;
-                }
-            }
-        }
-    }else{
-        for (int z0 : zs) {
-            for (int y0 : ys) {
-                for (int x0 : xs) {
-                    // For a cube starting at (x0, y0, z0) in the trimmed region,
-                    // the corresponding global (input_fields) base offset is:
-                    int base = ( (z0 + nGhostLayers) * yzStride ) +
-                            ( (y0 + nGhostLayers) * nCells[2] ) +
-                            ( x0 + nGhostLayers );
-                    cubeSrcBases[idx++] = base;
-                }
+            for (int x0 : xs) {
+                // For a cube starting at (x0, y0, z0) in the trimmed region,
+                // the corresponding global (input_fields) base offset is:
+                int base = ( (z0 + nGhostLayers) * yzStride ) +
+                        ( (y0 + nGhostLayers) * nCells[2] ) +
+                        ( x0 + nGhostLayers );
+                cubeSrcBases[idx++] = base;
             }
         }
     }
+    
 
     cubeDestBases.resize(nFields * numCubes);
     for (int f = 0; f < nFields; ++f) {
@@ -148,30 +133,16 @@ void MLCouplingMaiaAix::setup(
     // Precompute base offsets for every cube extracted.
     cubeBaseOffsets.resize(numCubes);
     idx = 0;
-    if (permute_order_yzx == true){
+ 
+    for (int z0 : zs) {
         for (int y0 : ys) {
-            for (int z0 : zs) {
-                for (int x0 : xs) {
-                    // The cube's base is the (global) offset in the full volume for its (0,0,0) element.
-                    // Add the ghost layer offset.
-                    int base = (z0 + nGhostLayers) * yzStride 
-                            + (y0 + nGhostLayers) * nCells[2] 
-                            + (x0 + nGhostLayers);
-                    cubeBaseOffsets[idx++] = base;
-                }
-            }
-        }
-    }else{
-        for (int z0 : zs) {
-            for (int y0 : ys) {
-                for (int x0 : xs) {
-                    // The cube's base is the (global) offset in the full volume for its (0,0,0) element.
-                    // Add the ghost layer offset.
-                    int base = (z0 + nGhostLayers) * yzStride 
-                            + (y0 + nGhostLayers) * nCells[2] 
-                            + (x0 + nGhostLayers);
-                    cubeBaseOffsets[idx++] = base;
-                }
+            for (int x0 : xs) {
+                // The cube's base is the (global) offset in the full volume for its (0,0,0) element.
+                // Add the ghost layer offset.
+                int base = (z0 + nGhostLayers) * yzStride 
+                        + (y0 + nGhostLayers) * nCells[2] 
+                        + (x0 + nGhostLayers);
+                cubeBaseOffsets[idx++] = base;
             }
         }
     }
@@ -200,76 +171,37 @@ void MLCouplingMaiaAix::preprocess_input(){
         SCOREP_USER_REGION_BEGIN(preprocessRegion, "MLCouplingMaiaAix::preprocess_input", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
-    if(permute_order_yzx == true){
-        // Loop over each field.
-        for (int f = 0; f < nFields; ++f) {
-            // Pointer to this field's input volume.
-            const double* srcField = input_fields[f];
-            for (int c = 0; c < numCubes; ++c) {
-                int batch_index = f * numCubes + c;
-                // Compute destination offset for the current time step:
-                int destOffset = cubeDestBases[batch_index] + iter * cubeSize;
-                float* destPtr = input_fields_pre + destOffset;
+    // Loop over each field.
+    for (int f = 0; f < nFields; ++f) {
+        // Pointer to this field's input volume.
+        const double* srcField = input_fields[f];
+        for (int c = 0; c < numCubes; ++c) {
+            int batch_index = f * numCubes + c;
+            // Compute destination offset for the current time step:
+            int destOffset = cubeDestBases[batch_index] + iter * cubeSize;
+            float* destPtr = input_fields_pre + destOffset;
 
-                // The top–left–front element of the cube in the input volume:
-                int srcBase = cubeSrcBases[c];
+            // The top–left–front element of the cube in the input volume:
+            int srcBase = cubeSrcBases[c];
 
-                // For each layer (dz) and each row (dy) within the cube, copy cubeD elements.
-                // Destination cube is stored contiguously with row stride = cubeD and plane stride = cubeD * cubeD.
+            // For each layer (dz) and each row (dy) within the cube, copy cubeD elements.
+            // Destination cube is stored contiguously with row stride = cubeD and plane stride = cubeD * cubeD.
+            for (int dz = 0; dz < cubeD; ++dz) {
+                // Compute the offset for the current cube layer in input.
+                int srcLayerOffset = srcBase + dz * yzStride;
+                // Compute the offset for the current cube layer in the flat destination:
+                int destLayerOffset = dz * (cubeD * cubeD);
                 for (int dy = 0; dy < cubeD; ++dy) {
-                    // Compute the offset for the current cube layer in input.
-                    int srcLayerOffset = srcBase + dy * rowStride;
-                    // Compute the offset for the current cube layer in the flat destination:
-                    int destLayerOffset = dy * (cubeD * cubeD);
-                    for (int dz = 0; dz < cubeD; ++dz) {
-                        int srcRowOffset = srcLayerOffset + dz * yzStride;
-                        int destRowOffset = destLayerOffset + dz * cubeD;
-                        // Copy a contiguous row of cubeD doubles.
-                        //std::memcpy(destPtr + destRowOffset,
-                        //              srcField + srcRowOffset,
-                        //              cubeD * sizeof(double));
+                    int srcRowOffset = srcLayerOffset + dy * rowStride;
+                    int destRowOffset = destLayerOffset + dy * cubeD;
+                    // Copy a contiguous row of cubeD doubles.
+                    //std::memcpy(destPtr + destRowOffset,
+                    //              srcField + srcRowOffset,
+                    //              cubeD * sizeof(double));
 
-                        // Copy each element with conversion from double to float.
-                        for (int dx = 0; dx < cubeD; ++dx) {
-                            destPtr[destRowOffset + dx] = static_cast<float>(srcField[srcRowOffset + dx]);
-                        }
-                    }
-                }
-            }
-        }
-    }else{
-        // Loop over each field.
-        for (int f = 0; f < nFields; ++f) {
-            // Pointer to this field's input volume.
-            const double* srcField = input_fields[f];
-            for (int c = 0; c < numCubes; ++c) {
-                int batch_index = f * numCubes + c;
-                // Compute destination offset for the current time step:
-                int destOffset = cubeDestBases[batch_index] + iter * cubeSize;
-                float* destPtr = input_fields_pre + destOffset;
-
-                // The top–left–front element of the cube in the input volume:
-                int srcBase = cubeSrcBases[c];
-
-                // For each layer (dz) and each row (dy) within the cube, copy cubeD elements.
-                // Destination cube is stored contiguously with row stride = cubeD and plane stride = cubeD * cubeD.
-                for (int dz = 0; dz < cubeD; ++dz) {
-                    // Compute the offset for the current cube layer in input.
-                    int srcLayerOffset = srcBase + dz * yzStride;
-                    // Compute the offset for the current cube layer in the flat destination:
-                    int destLayerOffset = dz * (cubeD * cubeD);
-                    for (int dy = 0; dy < cubeD; ++dy) {
-                        int srcRowOffset = srcLayerOffset + dy * rowStride;
-                        int destRowOffset = destLayerOffset + dy * cubeD;
-                        // Copy a contiguous row of cubeD doubles.
-                        //std::memcpy(destPtr + destRowOffset,
-                        //              srcField + srcRowOffset,
-                        //              cubeD * sizeof(double));
-
-                        // Copy each element with conversion from double to float.
-                        for (int i = 0; i < cubeD; ++i) {
-                            destPtr[destRowOffset + i] = static_cast<float>(srcField[srcRowOffset + i]);
-                        }
+                    // Copy each element with conversion from double to float.
+                    for (int i = 0; i < cubeD; ++i) {
+                        destPtr[destRowOffset + i] = static_cast<float>(srcField[srcRowOffset + i]);
                     }
                 }
             }
