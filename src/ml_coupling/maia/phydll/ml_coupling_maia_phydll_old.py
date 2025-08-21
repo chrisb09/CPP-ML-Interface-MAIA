@@ -172,7 +172,7 @@ def main():
             fields_data = np.stack(fields_data, axis=0)  # shape: [fields, seq_len, num_cubes, cubeD, cubeD, cubeD]
             
             # Permute axes so fields is after seq_len: (seq_len, fields, num_cubes, cubeD, cubeD, cubeD)
-            fields_data = np.transpose(fields_data, (1, 0, 3, 2, 4, 5))
+            fields_data = np.transpose(fields_data, (1, 0, 2, 4, 3, 5))
             
             # Flatten cube dims + fields dimension into feature dim: 
             # new shape: (seq_len, num_cubes, fields * cubeD * cubeD * cubeD)
@@ -200,7 +200,7 @@ def main():
                 tm.stop("run_inf")
                 
                 out = predictions[-1].view(-1).detach().cpu().numpy()
-                out_reshaped = out.reshape(fields, num_cubes, cubeD, cubeD, cubeD).permute((0,1,3,2,4))
+                out_reshaped = np.transpose(out.reshape(fields, num_cubes, cubeD, cubeD, cubeD), (0,1,3,2,4))
 
                 # Now flatten cube dims per field back to vector length
                 # Each field data will be shape: (num_cubes * cubeD^3) == vectorLen
