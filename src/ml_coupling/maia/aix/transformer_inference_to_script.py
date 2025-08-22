@@ -208,7 +208,7 @@ class TransformerInferenceWrapper(nn.Module):
         self.forecast_window = forecast_window  # Total number of prediction steps (>= 1)
         self.batch_first = batch_first
 
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
+    def forward(self, src: torch.Tensor) -> torch.Tensor:
         """
         Given only src as input, the forward loop builds an initial tgt and performs forecasting. 
         Slight semantic changes from Ai4HPC, but same functionality.
@@ -219,18 +219,16 @@ class TransformerInferenceWrapper(nn.Module):
         Returns:
             torch.Tensor: Final prediction output.
         """
-        device = input.device
+        device = src.device
         # Initialize tgt using the last time step of src,
         # ensuring the target sequence has the correct shape.
         if self.batch_first:
             # src shape: [batch, seq, features] --> tgt shape: [batch, 1, features]
-            tgt = input[:, -2:, :] #note that in this and the other calls where unsqueeze was previously done we dont have to because we added an : behind the -1
-            src = input[:, :-2, :]
+            tgt = src[:, -1:, :] #note that in this and the other calls where unsqueeze was previously done we dont have to because we added an : behind the -1
             seq_dim = 1
         else:
             # src shape: [seq, batch, features] --> tgt shape: [1, batch, features]
-            tgt = input[-2:, :, :]
-            src = input[:-2, :, :]
+            tgt = src[-1:, :, :]
             seq_dim = 0
 
         # Forecast loop: forecast_window-1 iterative steps appended to tgt.

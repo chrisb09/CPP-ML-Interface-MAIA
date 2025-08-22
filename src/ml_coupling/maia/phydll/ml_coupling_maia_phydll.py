@@ -9,7 +9,7 @@ import sys, random, itertools, os
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-from src.networks import transformer_tbl, run_encoder_decoder_inference_fixed
+from src.networks import transformer_tbl, run_encoder_decoder_inference
 import deepspeed
 import inspect
 import math
@@ -189,7 +189,7 @@ def main():
             
             with torch.no_grad():
                 tm.start("run_inf")
-                predictions = run_encoder_decoder_inference_fixed(
+                predictions = run_encoder_decoder_inference(
                     device=device,
                     model=model,
                     inputs=inputs,
