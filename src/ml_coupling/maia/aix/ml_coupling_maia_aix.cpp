@@ -13,6 +13,7 @@
 #include <fstream>
 #include <sstream>
 #include <cassert>
+#include <optional>
 
 #ifdef WITH_SCOREP
 #include <scorep/SCOREP_User.h>
@@ -62,7 +63,9 @@ void MLCouplingMaiaAix::setup(
     int param_inputStepDistance,
     double param_scalingFactor,
     int param_overlap,
-    int param_cubeD
+    int param_cubeD,
+    bool param_enable_hybrid,
+    std::optional<float> param_host_fraction
 ){
     #ifdef WITH_SCOREP
         SCOREP_USER_REGION_BEGIN(setupRegion, "MLCouplingMaiaAix::setup", SCOREP_USER_REGION_TYPE_FUNCTION);
@@ -90,7 +93,9 @@ void MLCouplingMaiaAix::setup(
         outputShape,
         output_fields_post,
         batchSize,
-        app_comm
+        app_comm,
+        param_enable_hybrid,
+        param_host_fraction
     );
 
     cubeSrcBases.resize(numCubes);

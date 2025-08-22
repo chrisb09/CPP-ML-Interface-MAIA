@@ -15,6 +15,7 @@
 #include <fstream>
 #include <sstream>
 #include <cassert>
+#include <optional>
 
 class MLCouplingMaiaAix : public MLCouplingMaia<float*, float*>{
 public:
@@ -40,8 +41,10 @@ public:
         int param_inputStepDistance,
         double param_scalingFactor,
         int param_overlap,
-        int param_cubeD
-    ) override;
+        int param_cubeD,
+        bool param_enable_hybrid,
+        std::optional<float> param_host_fraction = std::nullopt
+    );
 
     MPI_Comm getComm() override;
 

@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <mpi.h>
 #include "aixeleratorService/aixeleratorService.h"
+#include <optional>
 
 
 template <typename In, typename Out>
@@ -25,7 +26,9 @@ public:
         std::vector<int64_t> output_shape, 
         In* output_fields_ptr,
         int batch_size, 
-        MPI_Comm comm
+        MPI_Comm comm,
+        bool enable_hybrid,
+        std::optional<float> host_fraction = std::nullopt
     );
 
     void inference();
@@ -61,7 +64,9 @@ inline void MLCouplingStrategyAix<In, Out>::setup(
     std::vector<int64_t> output_shape, 
     In* output_fields_ptr,
     int batch_size, 
-    MPI_Comm comm
+    MPI_Comm comm,
+    bool enable_hybrid,
+    std::optional<float> host_fraction
 ) {
     this->aixelerator = new AIxeleratorService<In>(
         model_path, 
@@ -70,7 +75,9 @@ inline void MLCouplingStrategyAix<In, Out>::setup(
         output_shape, 
         output_fields_ptr,
         batch_size, 
-        comm
+        comm,
+        enable_hybrid,
+        host_fraction
     );
 }
 
