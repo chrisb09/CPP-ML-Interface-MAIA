@@ -195,7 +195,7 @@ def main():
                 predictions = run_encoder_decoder_inference(
                     device=device,
                     model=model,
-                    inputs=inputs,
+                    src=inputs,
                     forecast_window=forecast_window,
                     batch_size=inputs.shape[1],
                     batch_first=False
