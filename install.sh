@@ -45,9 +45,11 @@ fi
 
 #Install Torch
 if [ ! -d "${CPP_ML_ROOT}/extern/libtorch" ]; then
+    cd ${CPP_ML_ROOT}/extern
     echo "No libtorch found, downloading now..."
-    wget https://download.pytorch.org/libtorch/cu126/libtorch-cxx11-abi-shared-with-deps-2.7.1%2Bcu126.zip
-    unzip libtorch-cxx11-abi-shared-with-deps-2.7.1+cu126.zip
+    wget https://download.pytorch.org/libtorch/cu124/libtorch-cxx11-abi-shared-with-deps-2.6.0%2Bcu124.zip
+    unzip libtorch-cxx11-abi-shared-with-deps-2.6.0+cu124.zip
+    rm libtorch-cxx11-abi-shared-with-deps-2.6.0+cu124.zip
     echo "Download and unzip finished"
 fi
 
