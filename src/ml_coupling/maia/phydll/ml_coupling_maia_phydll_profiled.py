@@ -14,7 +14,9 @@ import deepspeed
 import inspect
 import math
 import argparse
-import scorep
+#import scorep
+import torch.profiler
+from torch.profiler import _ExperimentalConfig, record_function
 
 
 import thoplw
@@ -49,7 +51,6 @@ def main():
     dests = dll.get_distribution_info()["dest"]
     num_phy_procs = len(dests)
 
-
     ##################
     # Get Meta Information
     ##################
@@ -58,11 +59,10 @@ def main():
         tmp = np.empty(4, dtype=np.int64)
         globalComm.Recv(tmp, source=dest, tag=dest)
         meta_info_field.append(tmp)
-    
     #General data where no per process differences occur
     sequence_len = meta_info_field[0][0]#5
     forecast_window = meta_info_field[0][3]#2
-    checkpoint_path = '/work/thes1961/retraining/checkpoint.pth.tar'    
+    checkpoint_path = '/work/thes1961/ai4hpc/checkpoint.pth.tar'    
     cubeD = meta_info_field[0][1]#8
 
     #Determine process specific data initially  
@@ -102,7 +102,7 @@ def main():
 
     #Load model checkpoint
     loc = {'cuda:%d' % 0: 'cuda:%d' % my_device_id} if torch.cuda.is_available() else "cpu"
-    print(f"Location is {loc}")
+    print(f"Location is {loc}", flush=True)
     try:
         checkpoint = torch.load(checkpoint_path, map_location=loc)
         new_state_dict = {}
@@ -132,75 +132,86 @@ def main():
     tm.stop("Init")
     tm.start("Phydll")
     
-    while dll.is_phy_signal():
-        tm.start("recv")
-        curr_seq_idx+=1
-        
-        fields = dll.recv()
-        
-        split_points = np.cumsum(num_cells_per_process)[:-1]
-        
-        # pid
-        proc_chunks0 = np.split(fields["Python-DL-FIELD-INPUT-0"], split_points)
-        proc_chunks1 = np.split(fields["Python-DL-FIELD-INPUT-1"], split_points)
-        proc_chunks2 = np.split(fields["Python-DL-FIELD-INPUT-2"], split_points)
-        
-        for pid in range(num_phy_procs):
-            phy_fields[0][pid].append(proc_chunks0[pid])
-            phy_fields[1][pid].append(proc_chunks1[pid])
-            phy_fields[2][pid].append(proc_chunks2[pid])
-            # [fields][pid][seq][numcubes]
+    with torch.profiler.profile(
+        activities=[
+            torch.profiler.ProfilerActivity.CPU,
+            torch.profiler.ProfilerActivity.CUDA,
+        ],
+        profile_memory=True,
+        with_flops=True,
+        with_stack=True,
+        with_modules=True,
+        record_shapes=True,
+        experimental_config=_ExperimentalConfig(profile_all_threads=True),
+    ) as prof:
+        while dll.is_phy_signal():
+            tm.start("recv")
+            curr_seq_idx+=1
+            
+            fields = dll.recv()
+            
+            split_points = np.cumsum(num_cells_per_process)[:-1]
+            # pid
+            proc_chunks0 = np.split(fields["Python-DL-FIELD-INPUT-0"], split_points)
+            proc_chunks1 = np.split(fields["Python-DL-FIELD-INPUT-1"], split_points)
+            proc_chunks2 = np.split(fields["Python-DL-FIELD-INPUT-2"], split_points)
+            
+            for pid in range(num_phy_procs):
+                phy_fields[0][pid].append(proc_chunks0[pid])
+                phy_fields[1][pid].append(proc_chunks1[pid])
+                phy_fields[2][pid].append(proc_chunks2[pid])
+                # [fields][pid][seq][numcubes]
 
-        tm.stop("recv")
-        #Skip the next stuff if not yet gotten all sequences
-        if curr_seq_idx < sequence_len:
-            continue 
+            tm.stop("recv")
+            #Skip the next stuff if not yet gotten all sequences
+            if curr_seq_idx < sequence_len:
+                continue 
 
-            
-        tm.start("Main")
-        #Reshape each chunk into [sequenceLen, vectorLen]
-        curr_pos = 0 #Increases by num_cells_per_process[pid] // seqlen
-        nFields = 3
-        cubeSize = cubeD**3
-        #for pid, flat in enumerate(per_proc_flat_data):
-        for pid in range(num_phy_procs):
-            tm.start("process_data")
-            vectorLen = num_cells_per_process[pid]
-            
-            fields_data = []
-            for field in range(field_count):
-                data = np.array(phy_fields[field][pid])
-                data = data.reshape(sequence_len, (num_cells_per_process[pid]//cubeSize), cubeD, cubeD, cubeD)
-                fields_data.append(data)
-            # Stack along new 0th axis for fields
-            fields_data = np.stack(fields_data, axis=0)  # shape: [fields, seq_len, num_cubes, cubeD, cubeD, cubeD]
-            
-            # Permute axes so fields is after seq_len: (seq_len, fields, num_cubes, cubeD, cubeD, cubeD)
-            fields_data = np.transpose(fields_data, (1, 0, 2, 4, 3, 5)) #This includes the permute!
-            
-            # Flatten cube dims + fields dimension into feature dim: 
-            # new shape: (seq_len, num_cubes, fields * cubeD * cubeD * cubeD)
-            seq_len, fields, num_cubes, d1, d2, d3 = fields_data.shape
-            fields_data = fields_data.reshape(seq_len, fields * num_cubes, d1, d2, d3)
-            tm.stop("process_data")
-            # Now flatten cubes and features per timestep to get shape (seq_len, num_cubes * features)
-            #fields_data = fields_data.reshape(seq_len, -1)
+                
+            tm.start("Main")
+            #Reshape each chunk into [sequenceLen, vectorLen]
+            curr_pos = 0 #Increases by num_cells_per_process[pid] // seqlen
+            cubeSize = cubeD**3
+            #for pid, flat in enumerate(per_proc_flat_data):
+            for pid in range(num_phy_procs):
+                tm.start("process_data")
+                vectorLen = num_cells_per_process[pid]
+                
+                fields_data = []
+                for field in range(field_count):
+                    data = np.array(phy_fields[field][pid])
+                    data = data.reshape(sequence_len, (num_cells_per_process[pid]//cubeSize), cubeD, cubeD, cubeD)
+                    fields_data.append(data)
+                # Stack along new 0th axis for fields
+                fields_data = np.stack(fields_data, axis=0)  # shape: [fields, seq_len, num_cubes, cubeD, cubeD, cubeD]
+                
+                # Permute axes so fields is after seq_len: (seq_len, fields, num_cubes, cubeD, cubeD, cubeD)
+                fields_data = np.transpose(fields_data, (1, 0, 2, 4, 3, 5))
+                
+                # Flatten cube dims + fields dimension into feature dim: 
+                # new shape: (seq_len, num_cubes, fields * cubeD * cubeD * cubeD)
+                seq_len, fields, num_cubes, d1, d2, d3 = fields_data.shape
+                fields_data = fields_data.reshape(seq_len, fields * num_cubes, d1, d2, d3)
+                tm.stop("process_data")
+                # Now flatten cubes and features per timestep to get shape (seq_len, num_cubes * features)
+                #fields_data = fields_data.reshape(seq_len, -1)
 
-            # Convert to tensor
-            tm.start("inference")
-            inputs = torch.tensor(fields_data, dtype=torch.float32, device=device)
-            inputs = inputs.reshape(*inputs.size()[:-3], -1) #seqlen, fields*numcubes, cubeD^3
-            
-            with torch.no_grad():
-                tm.start("run_inf")
-                predictions = run_encoder_decoder_inference(
-                    device=device,
-                    model=model,
-                    src=inputs,
-                    forecast_window=forecast_window,
-                    batch_size=inputs.shape[1],
-                    batch_first=False
-                )
+                # Convert to tensor
+                tm.start("inference")
+                inputs = torch.tensor(fields_data, dtype=torch.float32, device=device)
+                inputs = inputs.reshape(*inputs.size()[:-3], -1) #seqlen, fields*numcubes, cubeD^3
+                
+                with torch.no_grad():
+                    tm.start("run_inf")
+                    predictions = run_encoder_decoder_inference(
+                        device=device,
+                        model=model,
+                        src=inputs,
+                        forecast_window=forecast_window,
+                        batch_size=inputs.shape[1],
+                        batch_first=False
+                    )
+                    
                 tm.stop("run_inf")
                 
                 out = predictions[-1].view(-1).detach().cpu().numpy()
@@ -211,25 +222,26 @@ def main():
                 for field in range(fields):
                     field_data = out_reshaped[field].reshape(-1)
                     dl_fields[field][curr_pos:curr_pos+vectorLen] = field_data
-            curr_pos = curr_pos + vectorLen    
-            tm.stop("inference")
-        tm.stop("Main")
+                curr_pos = curr_pos + vectorLen    
+                tm.stop("inference")
+            tm.stop("Main")
 
-        tm.start("send")
-        dl_fields_send = {
-            "Python-DL-FIELD-OUTPUT-0": dl_fields[0],
-            "Python-DL-FIELD-OUTPUT-1": dl_fields[1],
-            "Python-DL-FIELD-OUTPUT-2": dl_fields[2]
-        }
-        dll.send(dl_fields_send)
+            tm.start("send")
+            dl_fields_send = {
+                "Python-DL-FIELD-OUTPUT-0": dl_fields[0],
+                "Python-DL-FIELD-OUTPUT-1": dl_fields[1],
+                "Python-DL-FIELD-OUTPUT-2": dl_fields[2]
+            }
+            dll.send(dl_fields_send)
 
-        #Reset data
-        for field in range(field_count):
-            for pid in range(num_phy_procs):
-                phy_fields[field][pid].clear()
-        curr_seq_idx = 0 
-        tm.stop("send")
+            #Reset data
+            for field in range(field_count):
+                for pid in range(num_phy_procs):
+                    phy_fields[field][pid].clear()
+            curr_seq_idx = 0 
+            tm.stop("send")
 
+    prof.export_chrome_trace('./trace.json')
     dll.finalize()
 
     tm.stop("Phydll")
