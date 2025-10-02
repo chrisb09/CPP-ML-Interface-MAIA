@@ -209,6 +209,8 @@ void MLCouplingMaiaPhyDLL::preprocess_input(){
             }
         }
     }
+
+
     #ifdef WITH_SCOREP
         SCOREP_USER_REGION_END(preprocessRegion);
     #endif
@@ -220,6 +222,7 @@ void MLCouplingMaiaPhyDLL::inference(){
     #endif
 
     // input_fields_pre: [sequenceLen][field][numCubes * cubeD³]
+    
     for (int t = 0; t < inputSeqLen; ++t) { 
         for(int f = 0; f < nFields; f++){         
             double* ptr = input_fields_pre[t][f].data();  

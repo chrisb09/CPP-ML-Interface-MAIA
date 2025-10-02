@@ -10,6 +10,13 @@ if command -v readlink >/dev/null 2>&1; then
 script_name="$(readlink -f "${BASH_SOURCE:-$0}")"
 export CPP_ML_ROOT="$(dirname "$script_name")"
 echo "CPP_ML_ROOT = ${CPP_ML_ROOT}"
+
+INSTALL_FOLDER_DEFAULT="BUILD"
+# If first argument is given, use it, otherwise fallback to default
+INSTALL_FOLDER="${1:-$INSTALL_FOLDER_DEFAULT}"
+export INSTALL_FOLDER
+echo "Using INSTALL_FOLDER=${INSTALL_FOLDER}"
+
 else
     echo "Error: readlink is not available on your system. Make sure it is installed!"
 fi
@@ -62,7 +69,7 @@ if [ ! -f "${CPP_ML_ROOT}/extern/aixeleratorservice/BUILD/lib/libAIxeleratorServ
 
     cd ${CPP_ML_ROOT}/extern/aixeleratorservice/
     mkdir -p BUILD && cd BUILD
-    cmake .. -DWITH_TORCH=ON -DTorch_DIR=${CPP_ML_ROOT}/extern/libtorch/share/cmake/Torch
+    cmake .. -DWITH_TORCH=ON -DTorch_DIR=${CPP_ML_ROOT}/extern/libtorch/share/cmake/Torch -DWITH_HWLOC=ON -DHWLOC_ROOT=/cvmfs/software.hpc.rwth.de/Linux/RH9/x86_64/intel/sapphirerapids/software/hwloc/2.9.2-GCCcore-13.2.0 
     cmake --build . -j && cmake --install .
 
     echo "AIxeleratorService installation finished!"

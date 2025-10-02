@@ -14,7 +14,7 @@ import deepspeed
 import inspect
 import math
 import argparse
-import scorep
+#import scorep
 import torch.profiler
 from torch.profiler import _ExperimentalConfig, record_function
 

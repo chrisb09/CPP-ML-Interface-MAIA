@@ -10,6 +10,13 @@ if command -v readlink >/dev/null 2>&1; then
 script_name="$(readlink -f "${BASH_SOURCE:-$0}")"
 export CPP_ML_ROOT="$(dirname "$script_name")"
 echo "CPP_ML_ROOT = ${CPP_ML_ROOT}"
+
+INSTALL_FOLDER_DEFAULT="BUILD-SCOREP"
+# If first argument is given, use it, otherwise fallback to default
+INSTALL_FOLDER="${1:-$INSTALL_FOLDER_DEFAULT}"
+export INSTALL_FOLDER
+echo "Using INSTALL_FOLDER=${INSTALL_FOLDER}"
+
 else
     echo "Error: readlink is not available on your system. Make sure it is installed!"
 fi
@@ -35,7 +42,7 @@ fi
 export SCOREP_ENABLE_CUDA=0
 
 ## install PhyDLL
-if [ ! -f "${CPP_ML_ROOT}/extern/phydll/BUILD-SCOREP/lib/libphydll.so" ]; then
+if [ ! -f "${CPP_ML_ROOT}/extern/phydll/${INSTALL_FOLDER}/lib/libphydll.so" ]; then
     if [ ! -d "${CPP_ML_ROOT}/extern/phydll" ]; then
         git submodule init
         git submodule update
@@ -44,23 +51,23 @@ if [ ! -f "${CPP_ML_ROOT}/extern/phydll/BUILD-SCOREP/lib/libphydll.so" ]; then
     echo "PhyDLL not found! Installing..."
 
     cd ${CPP_ML_ROOT}/extern/phydll
-    mkdir -p BUILD-SCOREP
+    mkdir -p ${INSTALL_FOLDER}
     
     PATH=$PATH:${CPP_ML_ROOT}/scorep-wrapper \
     CC=scorep-mpicc \
     SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--user --io=none --nocompiler --memory=none --nocuda" \
     SCOREP_WRAPPER_COMPILER_FLAGS="-g -DSCOREP" \
     #SCOREP_WRAPPER=off \
-    make BUILD=${CPP_ML_ROOT}/extern/phydll/BUILD-SCOREP ENABLE_PYTHON=ON
+    make BUILD=${CPP_ML_ROOT}/extern/phydll/${INSTALL_FOLDER} ENABLE_PYTHON=ON
 
-    LD_LIBRARY_PATH=${CPP_ML_ROOT}/extern/phydll/BUILD-SCOREP/lib:${LD_LIBRARY_PATH} \
+    LD_LIBRARY_PATH=${CPP_ML_ROOT}/extern/phydll/${INSTALL_FOLDER}/lib:${LD_LIBRARY_PATH} \
     PYTHONPATH=${CPP_ML_ROOT}/extern/phydll/src/python:${PYTHONPATH} \
     PATH=$PATH:${CPP_ML_ROOT}/scorep-wrapper \
     CC=scorep-mpicc \
     SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--user --io=none --nocompiler --memory=none --nocuda" \
     SCOREP_WRAPPER_COMPILER_FLAGS="-g -DSCOREP" \
     #SCOREP_WRAPPER=off \
-    make BUILD_DIR=${CPP_ML_ROOT}/extern/phydll/BUILD-SCOREP ENABLE_PYTHON=ON TEST_VERBOSE=ON install
+    make BUILD_DIR=${CPP_ML_ROOT}/extern/phydll/${INSTALL_FOLDER} ENABLE_PYTHON=ON TEST_VERBOSE=ON install
 
     echo "PhyDLL installation finished!"
 else
@@ -81,7 +88,7 @@ if [ ! -d "${CPP_ML_ROOT}/extern/libtorch" ]; then
 fi
 
 ## install AIxeleratorService
-if [ ! -f "${CPP_ML_ROOT}/extern/aixeleratorservice/BUILD-SCOREP/lib/libAIxeleratorService.so" ]; then
+if [ ! -f "${CPP_ML_ROOT}/extern/aixeleratorservice/${INSTALL_FOLDER}/lib/libAIxeleratorService.so" ]; then
     if [ ! -d "${CPP_ML_ROOT}/extern/aixeleratorservice" ]; then
         git submodule init
         git submodule update
@@ -91,12 +98,14 @@ if [ ! -f "${CPP_ML_ROOT}/extern/aixeleratorservice/BUILD-SCOREP/lib/libAIxelera
     export SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--verbose=0 --nocompiler --user --io=none --memory=none --thread=none --nocuda"
     export SCOREP_WRAPPER_COMPILER_FLAGS="-g -DSCOREP"  
 
+
     cd ${CPP_ML_ROOT}/extern/aixeleratorservice/
-    mkdir -p BUILD-SCOREP && cd BUILD-SCOREP
+    mkdir -p ${INSTALL_FOLDER} && cd ${INSTALL_FOLDER}
     
     PATH=$PATH:${CPP_ML_ROOT}/scorep-wrapper \
     #SCOREP_WRAPPER=off \
-    cmake .. -DWITH_TORCH=ON -DTorch_DIR=${CPP_ML_ROOT}/extern/libtorch/share/cmake/Torch -DCMAKE_C_COMPILER=scorep-mpicc -DCMAKE_CXX_COMPILER=scorep-mpicxx #-DWITH_SCOREP=ON
+    cmake .. -DWITH_TORCH=ON -DTorch_DIR=${CPP_ML_ROOT}/extern/libtorch/share/cmake/Torch -DCMAKE_C_COMPILER=scorep-mpicc -DCMAKE_CXX_COMPILER=scorep-mpicxx -DWITH_HWLOC=ON -DHWLOC_ROOT=/cvmfs/software.hpc.rwth.de/Linux/RH9/x86_64/intel/sapphirerapids/software/hwloc/2.9.2-GCCcore-13.2.0 
+    #-DWITH_SCOREP=ON
     cmake --build . -j && cmake --install .
 
     echo "AIxeleratorService installation finished!"
@@ -129,7 +138,7 @@ else
 fi
 
 # install CPP-ML-Interface
-if [ ! -f "${CPP_ML_ROOT}/BUILD-SCOREP/lib/libmlCoupling.so" ]; then
+if [ ! -f "${CPP_ML_ROOT}/${INSTALL_FOLDER}/lib/libmlCoupling.so" ]; then
     echo "CPP-ML-Interface not found! Installing..."#
     
     export SCOREP_WRAPPER_INSTRUMENTER_FLAGS="--verbose=0 --nocompiler --user --mpp=mpi --io=none --memory=none --thread=none --nocuda"
@@ -137,8 +146,8 @@ if [ ! -f "${CPP_ML_ROOT}/BUILD-SCOREP/lib/libmlCoupling.so" ]; then
 
 
     cd ${CPP_ML_ROOT}
-    mkdir -p BUILD-SCOREP
-    cd BUILD-SCOREP
+    mkdir -p ${INSTALL_FOLDER}
+    cd ${INSTALL_FOLDER}
     
     PATH=$PATH:${CPP_ML_ROOT}/scorep-wrapper \
     CC=scorep-mpicc CXX=scorep-mpicxx \
@@ -152,5 +161,5 @@ else
     echo "CPP-ML-Interface installation found! Nothing to install."
 fi
 
-export LD_LIBRARY_PATH=${CPP_ML_ROOT}/extern/phydll/BUILD-SCOREP/lib:${LD_LIBRARY_PATH}
-export LD_LIBRARY_PATH=${CPP_ML_ROOT}/extern/aixeleratorservice/BUILD-SCOREP/lib:${LD_LIBRARY_PATH}
+export LD_LIBRARY_PATH=${CPP_ML_ROOT}/extern/phydll/${INSTALL_FOLDER}/lib:${LD_LIBRARY_PATH}
+export LD_LIBRARY_PATH=${CPP_ML_ROOT}/extern/aixeleratorservice/${INSTALL_FOLDER}/lib:${LD_LIBRARY_PATH}
