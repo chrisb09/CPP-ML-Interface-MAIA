@@ -104,7 +104,7 @@ if [ ! -f "${CPP_ML_ROOT}/extern/aixeleratorservice/${INSTALL_FOLDER}/lib/libAIx
     
     PATH=$PATH:${CPP_ML_ROOT}/scorep-wrapper \
     #SCOREP_WRAPPER=off \
-    cmake .. -DWITH_TORCH=ON -DTorch_DIR=${CPP_ML_ROOT}/extern/libtorch/share/cmake/Torch -DCMAKE_C_COMPILER=scorep-mpicc -DCMAKE_CXX_COMPILER=scorep-mpicxx -DWITH_HWLOC=ON -DHWLOC_ROOT=/cvmfs/software.hpc.rwth.de/Linux/RH9/x86_64/intel/sapphirerapids/software/hwloc/2.9.2-GCCcore-13.2.0 
+    cmake .. -DWITH_TORCH=ON -DTorch_DIR=${CPP_ML_ROOT}/extern/libtorch/share/cmake/Torch -DCMAKE_C_COMPILER=scorep-mpicc -DCMAKE_CXX_COMPILER=scorep-mpicxx
     #-DWITH_SCOREP=ON
     cmake --build . -j && cmake --install .
 
