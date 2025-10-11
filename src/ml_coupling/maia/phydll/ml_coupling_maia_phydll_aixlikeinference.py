@@ -42,9 +42,10 @@ def main():
     comm = dll.get_local_mpi_comm()
     lrank = comm.Get_rank()   
     globalComm = MPI.COMM_WORLD
-
+    
     field_count = 3 # number of DL fields
     dll.define_dl(count=field_count)
+    
 
     dests = dll.get_distribution_info()["dest"]
     num_phy_procs = len(dests)
@@ -52,23 +53,27 @@ def main():
     ##################
     # Get Meta Information
     ##################
+    
     meta_info_field = []
     for i, dest in enumerate(dests):
         tmp = np.empty(4, dtype=np.int64)
         globalComm.Recv(tmp, source=dest, tag=dest)
         meta_info_field.append(tmp)
+    
     #General data where no per process differences occur
     sequence_len = meta_info_field[0][0]#5
     forecast_window = meta_info_field[0][3]#2
     checkpoint_path = '/work/thes1961/ai4hpc/checkpoint.pth.tar'    
     cubeD = meta_info_field[0][1]#8
 
+    
     #Determine process specific data initially  
     num_cells_per_process = []
     for pid in range(num_phy_procs):
         num_cells_per_process.append(meta_info_field[pid][2] // sequence_len // field_count) #sequenceLen * nFields * numCubes * cubeSize
         print(f"num_cells_per_process {num_cells_per_process[pid]}")
         print(f"numcubes for proc {pid}: {num_cells_per_process[pid]//(cubeD**3)}")
+    
     ##################
     # GPU device
     ##################
@@ -84,6 +89,7 @@ def main():
     print(f"Device is {device}")
     print(f"Deviceid is {my_device_id}")
 
+    
     ##################
     # import DL model
     ##################
@@ -98,6 +104,7 @@ def main():
         batch_first=False
     )
 
+    
     #Load model checkpoint
     loc = {'cuda:%d' % 0: 'cuda:%d' % my_device_id} if torch.cuda.is_available() else "cpu"
     print(f"Location is {loc}", flush=True)
@@ -144,6 +151,7 @@ def main():
         phy_fields[0].append(fields["Python-DL-FIELD-INPUT-0"])
         phy_fields[1].append(fields["Python-DL-FIELD-INPUT-1"])
         phy_fields[2].append(fields["Python-DL-FIELD-INPUT-2"])
+        
         #for pid in range(num_phy_procs):
         #    phy_fields[0][pid].append(proc_chunks0[pid])
         #    phy_fields[1][pid].append(proc_chunks1[pid])
@@ -188,7 +196,7 @@ def main():
         tm.start("inference")
         inputs = torch.tensor(fields_data, dtype=torch.float32, device=device)
         inputs = inputs.reshape(*inputs.size()[:-3], -1) #seqlen, fields*numcubes, cubeD^3
-        
+
         with torch.no_grad():
             tm.start("run_inf")
             predictions = run_encoder_decoder_inference(
@@ -201,12 +209,13 @@ def main():
             )
             tm.stop("run_inf")
             
-            out = predictions[-1].view(-1).detach().cpu().numpy()
+            out = predictions[-1].view(-1).detach().cpu().numpy().astype(np.float64)
             out_reshaped = np.transpose(out.reshape(fields, num_cubes, cubeD, cubeD, cubeD), (0,1,3,2,4))
 
             for field in range(fields):
                 field_data = out_reshaped[field].reshape(-1)
                 dl_fields[field] = field_data
+
         tm.stop("inference")
         tm.stop("Main")
 
