@@ -105,7 +105,7 @@ public:
         //ys.insert(ys.begin(), 0);
         //zs.insert(zs.begin(), 0);  
 
-        numCubes = zs.size() * ys.size() * xs.size() + 1;
+        numCubes = zs.size() * ys.size() * xs.size();
         std::cout << "numcubes: " << numCubes << std::endl;
         totalElements = static_cast<int64_t>(inputSeqLen) * static_cast<int64_t>(nFields) * static_cast<int64_t>(numCubes) * static_cast<int64_t>(cubeSize);
 
