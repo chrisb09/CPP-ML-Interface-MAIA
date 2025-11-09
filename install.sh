@@ -61,7 +61,7 @@ if [ ! -d "${CPP_ML_ROOT}/extern/libtorch" ]; then
 fi
 
 ## install AIxeleratorService
-if [ ! -f "${CPP_ML_ROOT}/extern/aixeleratorservice/BUILD/lib/libAIxeleratorService.so" ]; then
+if [ ! -f "${CPP_ML_ROOT}/extern/aixeleratorservice/INSTALL/lib/libAIxeleratorService.so" ]; then
     if [ ! -d "${CPP_ML_ROOT}/extern/aixeleratorservice" ]; then
         git submodule init
         git submodule update
@@ -71,7 +71,9 @@ if [ ! -f "${CPP_ML_ROOT}/extern/aixeleratorservice/BUILD/lib/libAIxeleratorServ
 
     cd ${CPP_ML_ROOT}/extern/aixeleratorservice/
     mkdir -p BUILD && cd BUILD
-    cmake .. -DWITH_TORCH=ON -DTorch_DIR=${CPP_ML_ROOT}/extern/libtorch/share/cmake/Torch #-DWITH_HWLOC=ON -DHWLOC_ROOT=/cvmfs/software.hpc.rwth.de/Linux/RH9/x86_64/intel/sapphirerapids/software/hwloc/2.9.2-GCCcore-13.2.0 
+    mkdir -p INSTALL
+
+    cmake .. -DWITH_TORCH=ON  -DTORCH_VERSION="2.6.0" -DCMAKE_INSTALL_PREFIX=${CPP_ML_ROOT}/extern/aixeleratorservice/INSTALL
     cmake --build . -j && cmake --install .
 
     echo "AIxeleratorService installation finished!"

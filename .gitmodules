@@ -1,9 +1,9 @@
-[submodule "extern/aixeleratorservice"]
-	path = extern/aixeleratorservice
-	url = git@git-ce.rwth-aachen.de:fabian.orland/aixeleratorservice.git
 [submodule "extern/phydll"]
 	path = extern/phydll
 	url = git@git-ce.rwth-aachen.de:tomhilgers/phydll.git
 [submodule "extern/HighFive"]
 	path = extern/HighFive
 	url = https://github.com/BlueBrain/HighFive
+[submodule "extern/aixeleratorservice"]
+	path = extern/aixeleratorservice
+	url = https://github.com/RWTH-HPC/AIxeleratorService.git

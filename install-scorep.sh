@@ -88,7 +88,7 @@ if [ ! -d "${CPP_ML_ROOT}/extern/libtorch" ]; then
 fi
 
 ## install AIxeleratorService
-if [ ! -f "${CPP_ML_ROOT}/extern/aixeleratorservice/${INSTALL_FOLDER}/lib/libAIxeleratorService.so" ]; then
+if [ ! -f "${CPP_ML_ROOT}/extern/aixeleratorservice/INSTALL-SCOREP/lib/libAIxeleratorService.so" ]; then
     if [ ! -d "${CPP_ML_ROOT}/extern/aixeleratorservice" ]; then
         git submodule init
         git submodule update
@@ -101,10 +101,11 @@ if [ ! -f "${CPP_ML_ROOT}/extern/aixeleratorservice/${INSTALL_FOLDER}/lib/libAIx
 
     cd ${CPP_ML_ROOT}/extern/aixeleratorservice/
     mkdir -p ${INSTALL_FOLDER} && cd ${INSTALL_FOLDER}
+    mkdir -p INSTALL-SCOREP
     
     PATH=$PATH:${CPP_ML_ROOT}/scorep-wrapper \
     #SCOREP_WRAPPER=off \
-    cmake .. -DWITH_TORCH=ON -DTorch_DIR=${CPP_ML_ROOT}/extern/libtorch/share/cmake/Torch -DCMAKE_C_COMPILER=scorep-mpicc -DCMAKE_CXX_COMPILER=scorep-mpicxx #-DWITH_HWLOC=ON -DHWLOC_ROOT=/cvmfs/software.hpc.rwth.de/Linux/RH9/x86_64/intel/sapphirerapids/software/hwloc/2.9.2-GCCcore-13.2.0 -DNUMA_ROOT=/cvmfs/software.hpc.rwth.de/Linux/RH9/x86_64/intel/sapphirerapids/software/numactl/2.0.18-GCCcore-13.3.0
+    cmake .. -DWITH_TORCH=ON -DTORCH_VERSION="2.6.0" -DCMAKE_C_COMPILER=scorep-mpicc -DCMAKE_CXX_COMPILER=scorep-mpicxx -DCMAKE_INSTALL_PREFIX=${CPP_ML_ROOT}/extern/aixeleratorservice/INSTALL-SCOREP
     #-DWITH_SCOREP=ON
     cmake --build . -j && cmake --install .
 

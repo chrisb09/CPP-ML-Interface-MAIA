@@ -1,7 +1,7 @@
 #!/usr/local_rwth/bin/zsh
 
 # create virtual environment for Python
-source ../../setup_env_claix23.sh
+source ${CPP_ML_ROOT}/setup_env_claix23.sh
 python -m venv venv
 source venv/bin/activate
 pip install --no-cache-dir Cython 
