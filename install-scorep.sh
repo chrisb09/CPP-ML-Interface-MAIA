@@ -139,6 +139,7 @@ else
 fi
 
 # install CPP-ML-Interface
+
 if [ ! -f "${CPP_ML_ROOT}/${INSTALL_FOLDER}/lib/libmlCoupling.so" ]; then
     echo "CPP-ML-Interface not found! Installing..."#
     
@@ -154,12 +155,14 @@ if [ ! -f "${CPP_ML_ROOT}/${INSTALL_FOLDER}/lib/libmlCoupling.so" ]; then
     CC=scorep-mpicc CXX=scorep-mpicxx \
     #SCOREP_WRAPPER=off \
     cmake .. -DWITH_PHYDLL=ON -DCMAKE_INSTALL_PREFIX=./ -DWITH_AIX=ON -DWITH_REFERENCE_MODEL=ON -DWITH_SCOREP=ON -DCMAKE_CXX_COMPILER=scorep-mpicxx
+    ###cmake .. -DWITH_PHYDLL=ON -DCMAKE_INSTALL_PREFIX=./ -DWITH_AIX=OFF -DWITH_REFERENCE_MODEL=ON -DWITH_SCOREP=ON -DCMAKE_CXX_COMPILER=scorep-mpicxx
     
     cmake --build . -j && cmake --install .
 
     echo "CPP-ML-Interface installation finished!"
 else
     echo "CPP-ML-Interface installation found! Nothing to install."
+    echo "  You can remove the file ${CPP_ML_ROOT}/${INSTALL_FOLDER}/lib/libmlCoupling.so to force a re-installation."
 fi
 
 export LD_LIBRARY_PATH=${CPP_ML_ROOT}/extern/phydll/${INSTALL_FOLDER}/lib:${LD_LIBRARY_PATH}
