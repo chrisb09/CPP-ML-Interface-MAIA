@@ -15,6 +15,7 @@ import inspect
 import math
 import argparse
 import scorep
+import os
 
 
 import thoplw
@@ -63,7 +64,8 @@ def main():
     #General data where no per process differences occur
     sequence_len = meta_info_field[0][0]#5
     forecast_window = meta_info_field[0][3]#2
-    checkpoint_path = '/work/thes1961/ai4hpc/checkpoint.pth.tar'    
+    checkpoint_path = os.environ.get('AI4HPC_CHECKPOINT', '/work/thes1961/ai4hpc/checkpoint.pth.tar')
+    #checkpoint_path = '/work/thes1961/ai4hpc/checkpoint.pth.tar'    
     cubeD = meta_info_field[0][1]#8
 
     
@@ -93,30 +95,40 @@ def main():
     ##################
     # import DL model
     ##################
-    inp_size = cubeD**3
-    model = transformer_tbl(
-        dim_val=1024,
-        inp_dim=inp_size,
-        n_dec_lay=6,
-        n_enc_lay=6,
-        n_heads=16,
-        num_pred_features=inp_size,
-        batch_first=False
-    )
-
+    # Option to use scripted model or checkpoint
+    use_scripted = os.environ.get('USE_SCRIPTED_MODEL', 'false').lower() == 'true'
     
-    #Load model checkpoint
-    loc = {'cuda:%d' % 0: 'cuda:%d' % my_device_id} if torch.cuda.is_available() else "cpu"
-    print(f"Location is {loc}", flush=True)
-    try:
-        checkpoint = torch.load(checkpoint_path, map_location=loc)
-        new_state_dict = {}
-        for k in checkpoint['state_dict']:
-            new_key = k.replace('module.', '')
-            new_state_dict[new_key] = checkpoint['state_dict'][k]
-        model.load_state_dict(new_state_dict)
-    except Exception as e:
-        print(f"PHYDLL: caught error when loading model: {e}")
+    if use_scripted:
+        # Load pre-compiled TorchScript model
+        scripted_model_path = os.environ.get('SCRIPTED_MODEL_PATH', './input/transformer_inference_scripted_fw2.pt')
+        print(f"Loading scripted model from {scripted_model_path}", flush=True)
+        loc = {'cuda:%d' % 0: 'cuda:%d' % my_device_id} if torch.cuda.is_available() else "cpu"
+        model = torch.jit.load(scripted_model_path, map_location=loc)
+    else:
+        # Build model and load checkpoint (original method)
+        inp_size = cubeD**3
+        model = transformer_tbl(
+            dim_val=1024,
+            inp_dim=inp_size,
+            n_dec_lay=6,
+            n_enc_lay=6,
+            n_heads=16,
+            num_pred_features=inp_size,
+            batch_first=False
+        )
+        
+        #Load model checkpoint
+        loc = {'cuda:%d' % 0: 'cuda:%d' % my_device_id} if torch.cuda.is_available() else "cpu"
+        print(f"Location is {loc}", flush=True)
+        try:
+            checkpoint = torch.load(checkpoint_path, map_location=loc)
+            new_state_dict = {}
+            for k in checkpoint['state_dict']:
+                new_key = k.replace('module.', '')
+                new_state_dict[new_key] = checkpoint['state_dict'][k]
+            model.load_state_dict(new_state_dict)
+        except Exception as e:
+            print(f"PHYDLL: caught error when loading model: {e}")
 
     model.to(device)
     model.eval()

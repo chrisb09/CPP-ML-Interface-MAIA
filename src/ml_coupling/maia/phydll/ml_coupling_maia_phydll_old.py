@@ -15,6 +15,7 @@ import inspect
 import math
 import argparse
 import scorep
+import os
 
 
 import thoplw
@@ -60,7 +61,8 @@ def main():
     #General data where no per process differences occur
     sequence_len = 5
     forecast_window = 2
-    checkpoint_path = '/work/thes1961/ai4hpc/checkpoint.pth.tar'    
+    checkpoint_path = os.environ.get('AI4HPC_CHECKPOINT', '/work/thes1961/ai4hpc/checkpoint.pth.tar')
+    #checkpoint_path = '/work/thes1961/ai4hpc/checkpoint.pth.tar'    
     cubeD = 8
 
     #Determine process specific data initially  

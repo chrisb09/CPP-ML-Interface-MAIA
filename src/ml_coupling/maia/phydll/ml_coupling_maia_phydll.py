@@ -60,7 +60,8 @@ def main():
     #General data where no per process differences occur
     sequence_len = meta_info_field[0][0]#5
     forecast_window = meta_info_field[0][3]#2
-    checkpoint_path = '/work/thes1961/ai4hpc/checkpoint.pth.tar'    
+    checkpoint_path = os.environ.get('AI4HPC_CHECKPOINT', '/work/thes1961/ai4hpc/checkpoint.pth.tar')
+    #checkpoint_path = '/work/thes1961/ai4hpc/checkpoint.pth.tar'    
     cubeD = meta_info_field[0][1]#8
 
     #Determine process specific data initially  

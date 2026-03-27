@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import argparse
+import os
 
 """
 This code is adapted from AI4HPC to convert its Transformer model into a single Torchscript model.
@@ -282,7 +283,7 @@ if __name__ == "__main__":
     # Add command-line arguments
     parser.add_argument("--cube-dim", help="Size of cube per dimension", type=int, default=8)
     parser.add_argument("--forecast-window", help="forecast_window", type=int, default=2)
-    parser.add_argument("--checkpoint-path", help="Checkpoint path", type=str, default='/work/thes1961/ai4hpc/checkpoint.pth.tar')
+    parser.add_argument("--checkpoint-path", help="Checkpoint path", type=str, default=os.environ.get('AI4HPC_CHECKPOINT', '/work/thes1961/ai4hpc/checkpoint.pth.tar'))
 
     # Parse the arguments
     # Define your hyperparameters (adjust these as needed)
