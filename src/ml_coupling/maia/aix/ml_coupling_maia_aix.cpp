@@ -13,7 +13,32 @@
 #include <fstream>
 #include <sstream>
 #include <cassert>
+#include <cstdlib>
 #include <optional>
+
+namespace {
+int debug_inference_index = 0;
+bool debug_export_active = false;
+std::string debug_prefix;
+
+bool debug_enabled()
+{
+    const char* enabled = std::getenv("MLCOUPLING_DEBUG_EXPORT");
+    if (!enabled || std::string(enabled) != "1") return false;
+    int rank = 0;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    const char* requested_rank = std::getenv("MLCOUPLING_DEBUG_RANK");
+    return rank == (requested_rank ? std::atoi(requested_rank) : 0);
+}
+
+template <typename T>
+void debug_dump(const std::string& stage, const T* values, size_t count)
+{
+    if (!debug_export_active || !values || count == 0) return;
+    std::ofstream output(debug_prefix + "_" + stage + ".bin", std::ios::binary);
+    output.write(reinterpret_cast<const char*>(values), static_cast<std::streamsize>(count * sizeof(T)));
+}
+}
 
 #ifdef WITH_SCOREP
 #include <scorep/SCOREP_User.h>
@@ -225,7 +250,28 @@ void MLCouplingMaiaAix::inference(){
         SCOREP_USER_REGION_BEGIN(inferenceRegion, "MLCouplingMaiaAix::inference", SCOREP_USER_REGION_TYPE_FUNCTION);
     #endif
 
+    const char* max_env = std::getenv("MLCOUPLING_DEBUG_MAX_INFERENCES");
+    const int max_inferences = max_env ? std::atoi(max_env) : 1;
+    debug_export_active = debug_enabled() && ++debug_inference_index <= max_inferences;
+    if (debug_export_active) {
+        const char* root = std::getenv("MLCOUPLING_DEBUG_EXPORT_DIR");
+        debug_prefix = std::string(root ? root : "mlcoupling-debug") + "/legacy_inference_" + std::to_string(debug_inference_index);
+        std::ofstream manifest(debug_prefix + "_manifest.txt");
+        manifest << "implementation=legacy\n";
+        manifest << "cube_dimension=" << cubeD << "\n";
+        manifest << "cube_overlap=" << overlap << "\n";
+        manifest << "input_sequence_length=" << inputSeqLen << "\n";
+        manifest << "forecast_window=" << forecastWindow << "\n";
+        manifest << "normalization=none\n";
+        debug_dump("assembled_input", input_fields_pre, static_cast<size_t>(totalElements));
+        debug_dump("cube_weights", weight.data(), weight.size());
+        debug_dump("cube_base_offsets", cubeBaseOffsets.data(), cubeBaseOffsets.size());
+        debug_dump("cube_offsets", cubeOffsets.data(), cubeOffsets.size());
+    }
+
     couplingStrategy->inference();
+    debug_dump("raw_provider_output", output_fields_post,
+               static_cast<size_t>(nFields) * static_cast<size_t>(numCubes) * static_cast<size_t>(forecastWindow) * static_cast<size_t>(cubeSize));
 
     #ifdef WITH_SCOREP
         SCOREP_USER_REGION_END(inferenceRegion);
@@ -251,6 +297,12 @@ void MLCouplingMaiaAix::postprocess_output(){
                           0.0);
             }
         }
+    }
+    if (debug_export_active) {
+        for (int f = 0; f < nFields; ++f) {
+            debug_dump("reconstructed_field" + std::to_string(f), output_fields[f], static_cast<size_t>(fullFieldCells));
+        }
+        debug_export_active = false;
     }
     
     // Reconstruct the full volumes directly from the flat output array.
