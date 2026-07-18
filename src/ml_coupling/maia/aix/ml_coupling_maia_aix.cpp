@@ -27,6 +27,8 @@ bool debug_enabled()
     if (!enabled || std::string(enabled) != "1") return false;
     int rank = 0;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    const char* all_ranks = std::getenv("MLCOUPLING_DEBUG_ALL_RANKS");
+    if (all_ranks && std::string(all_ranks) == "1") return true;
     const char* requested_rank = std::getenv("MLCOUPLING_DEBUG_RANK");
     return rank == (requested_rank ? std::atoi(requested_rank) : 0);
 }
@@ -255,9 +257,14 @@ void MLCouplingMaiaAix::inference(){
     debug_export_active = debug_enabled() && ++debug_inference_index <= max_inferences;
     if (debug_export_active) {
         const char* root = std::getenv("MLCOUPLING_DEBUG_EXPORT_DIR");
-        debug_prefix = std::string(root ? root : "mlcoupling-debug") + "/legacy_inference_" + std::to_string(debug_inference_index);
+        int rank = 0;
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+        debug_prefix = std::string(root ? root : "mlcoupling-debug") + "/legacy_rank_" + std::to_string(rank) + "_inference_" + std::to_string(debug_inference_index);
         std::ofstream manifest(debug_prefix + "_manifest.txt");
         manifest << "implementation=legacy\n";
+        manifest << "rank=" << rank << "\n";
+        manifest << "n_cells=" << nCells[0] << "," << nCells[1] << "," << nCells[2] << "\n";
+        manifest << "offsets=" << nOffsetCells[0] << "," << nOffsetCells[1] << "," << nOffsetCells[2] << "\n";
         manifest << "cube_dimension=" << cubeD << "\n";
         manifest << "cube_overlap=" << overlap << "\n";
         manifest << "input_sequence_length=" << inputSeqLen << "\n";
